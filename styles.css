@@ -484,77 +484,55 @@ select:focus {
 
 .history-list {
   display: grid;
-  gap: 12px;
+  gap: 10px;
 }
 
-.history-round {
+.history-person {
   background: rgba(8, 20, 14, 0.45);
   border: 1px solid rgba(244, 234, 213, 0.08);
   border-radius: 14px;
   padding: 12px;
 }
 
-.history-round.totals {
-  border-color: rgba(232, 197, 71, 0.28);
-  background: rgba(232, 197, 71, 0.08);
+.history-person h3 {
+  margin: 0 0 10px;
+  font-size: 16px;
 }
 
-.history-round-head {
+.score-chips {
   display: flex;
-  justify-content: space-between;
-  align-items: baseline;
+  flex-wrap: wrap;
   gap: 8px;
-  margin-bottom: 8px;
 }
 
-.history-round-head h3 {
-  margin: 0;
-  font-size: 15px;
+.score-chip {
+  min-width: 56px;
+  padding: 8px 10px 7px;
+  border-radius: 12px;
+  background: rgba(244, 234, 213, 0.08);
+  text-align: center;
 }
 
-.history-round-head span {
-  font-size: 11px;
+.score-chip.empty {
+  opacity: 0.45;
+}
+
+.score-chip-round {
+  display: block;
+  font-size: 10px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--ivory-dim);
 }
 
-.history-score {
-  display: grid;
-  grid-template-columns: minmax(0, 1.3fr) 0.8fr 0.7fr;
-  gap: 8px;
-  align-items: center;
-  padding: 8px 0;
-  border-top: 1px solid rgba(244, 234, 213, 0.06);
-  font-size: 15px;
-}
-
-.history-score.head {
-  border-top: 0;
-  padding-top: 0;
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--ivory-dim);
-}
-
-.hs-name {
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.hs-pts,
-.hs-run,
-.history-score span:nth-child(2),
-.history-score span:nth-child(3) {
-  text-align: right;
-}
-
-.hs-run {
-  color: var(--gold-2);
+.score-chip-pts {
+  display: block;
+  margin-top: 2px;
+  font-family: "Cormorant Garamond", Georgia, serif;
+  font-size: 24px;
   font-weight: 700;
+  line-height: 1;
+  color: var(--ivory);
 }
 
 .toast {
