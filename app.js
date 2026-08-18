@@ -20,6 +20,8 @@
     target: 0,
     draft: {},
     toast: "",
+    resultOpen: false,
+    resultShownFor: "",
   });
 
   function loadState() {
@@ -78,8 +80,8 @@
     return totalsFrom(state.rounds);
   }
 
-  function standings() {
-    const sums = totals();
+  function standingsFrom(rounds) {
+    const sums = totalsFrom(rounds);
     const target = Number(state.target) || 0;
     return state.players
       .map((player, index) => {
@@ -97,6 +99,46 @@
         if (a.total !== b.total) return a.total - b.total;
         return a.index - b.index;
       });
+  }
+
+  function standings() {
+    return standingsFrom(state.rounds);
+  }
+
+  function outKeyFrom(rounds) {
+    return standingsFrom(rounds)
+      .filter((player) => player.out)
+      .map((player) => player.id)
+      .sort()
+      .join(",");
+  }
+
+  function gameResultFrom(rounds) {
+    const ranked = standingsFrom(rounds);
+    const losers = ranked.filter((player) => player.out).sort((a, b) => b.total - a.total);
+    if (!losers.length) return null;
+    const safe = ranked.filter((player) => !player.out);
+    const winner = safe[0] || [...ranked].sort((a, b) => {
+      if (a.total !== b.total) return a.total - b.total;
+      return a.index - b.index;
+    })[0];
+    return {
+      winner,
+      losers: losers.filter((player) => player.id !== winner.id),
+      safe: safe.filter((player) => player.id !== winner.id),
+      allOut: safe.length === 0,
+    };
+  }
+
+  function withResult(rounds, extra = {}) {
+    const key = outKeyFrom(rounds);
+    const opened = Boolean(key) && key !== state.resultShownFor;
+    return {
+      rounds,
+      resultShownFor: key,
+      resultOpen: opened ? true : key ? state.resultOpen : false,
+      ...extra,
+    };
   }
 
   function parseScore(raw) {
@@ -140,13 +182,15 @@
     const player = state.players.find((p) => p.id === playerId);
     const name = player ? playerName(player, state.players.indexOf(player)) : "Player";
     const finished = roundComplete(rounds[index]);
-    setState({
-      rounds,
+    const over = Number(state.target) > 0 && totalsFrom(rounds)[playerId] >= Number(state.target);
+    setState(withResult(rounds, {
       draft,
-      toast: finished
-        ? `${name} ${replacing ? "updated to" : "+"} ${value}. Round ${index + 1} complete.`
-        : `${name} ${replacing ? "updated to" : "+"} ${value}. Total is now ${totalsFrom(rounds)[playerId]}.`,
-    });
+      toast: over
+        ? `${name} reached ${state.target}.`
+        : finished
+          ? `${name} ${replacing ? "updated to" : "+"} ${value}. Round ${index + 1} complete.`
+          : `${name} ${replacing ? "updated to" : "+"} ${value}. Total is now ${totalsFrom(rounds)[playerId]}.`,
+    }));
     return true;
   }
 
@@ -161,19 +205,16 @@
       }
       rounds[index].scores[player.id] = value;
     }
-    setState({
-      rounds,
+    setState(withResult(rounds, {
       draft: {},
       toast: "Round added. Totals updated.",
-    });
+    }));
   }
 
   function undoRound() {
     if (!state.rounds.length) return;
-    setState({
-      rounds: state.rounds.slice(0, -1),
-      toast: "Last round removed.",
-    });
+    const rounds = state.rounds.slice(0, -1);
+    setState(withResult(rounds, { toast: "Last round removed." }));
   }
 
   function showToast(message) {
@@ -241,14 +282,16 @@
         <p class="hint">Add names for everyone at the table. You can change these later.</p>
         <div class="setup-list">${rows}</div>
         <div class="target-row">
-          <div>
-            <label class="hint" for="target">Drop-out score</label>
-            <select id="target" data-action="target">
-              <option value="0" ${Number(state.target) === 0 ? "selected" : ""}>No limit</option>
-              <option value="320" ${Number(state.target) === 320 ? "selected" : ""}>320 points</option>
-              <option value="520" ${Number(state.target) === 520 ? "selected" : ""}>520 points</option>
-              <option value="720" ${Number(state.target) === 720 ? "selected" : ""}>720 points</option>
-            </select>
+          <p class="hint">Drop-out score — first to reach this loses</p>
+          <div class="chips">
+            ${[
+              [0, "None"],
+              [320, "320"],
+              [520, "520"],
+              [720, "720"],
+            ].map(([value, label]) => `
+              <button type="button" class="chip ${Number(state.target) === value ? "active" : ""}" data-action="target" data-value="${value}">${label}</button>
+            `).join("")}
           </div>
         </div>
         <div class="actions">
@@ -279,18 +322,17 @@
             : player.total - savedThisRound + pending;
         const pendingHtml =
           pending == null
-            ? ""
+            ? (player.out ? `<div class="pending">Reached ${state.target}</div>` : "")
             : `<div class="pending">${savedThisRound == null ? "+" : ""}${pending} → ${projected}</div>`;
         return `
-          <article class="player-card ${place === 0 && !player.out ? "winning" : ""} ${player.out ? "out" : ""}" data-player-id="${player.id}">
-            <span class="corner tl ${red}">${suit}</span>
-            <span class="corner br ${red}">${suit}</span>
-            <span class="place">${player.out ? "Out" : place === 0 ? "Lead" : `${place + 1}${["st", "nd", "rd"][place] || "th"}`}</span>
-            <div class="pname">${escapeHtml(player.name)}</div>
+          <article class="player-row ${place === 0 && !player.out ? "winning" : ""} ${player.out ? "out" : ""}" data-player-id="${player.id}">
+            <span class="suit ${red}">${suit}</span>
+            <div>
+              <div class="pname">${escapeHtml(player.name)}</div>
+              ${pendingHtml}
+            </div>
             <div class="ptotal">${player.total}</div>
-            <div class="plabel">total</div>
-            ${pendingHtml}
-            ${player.out ? `<span class="out-tag">Reached ${state.target}</span>` : ""}
+            <span class="place">${player.out ? "Lost" : place === 0 ? "Lead" : `${place + 1}${["st", "nd", "rd"][place] || "th"}`}</span>
           </article>
         `;
       })
@@ -315,22 +357,26 @@
         }
         return `
           <div class="round-row ${saved == null ? "" : "saved"}">
-            <button class="won-btn" data-action="won" data-id="${player.id}" title="Set 0 — this player won the round">0</button>
-            <div class="who">${escapeHtml(name)}</div>
-            <input
-              type="number"
-              inputmode="numeric"
-              min="0"
-              step="1"
-              autocomplete="off"
-              enterkeyhint="done"
-              data-action="draft"
-              data-id="${player.id}"
-              value="${state.draft[player.id] ?? ""}"
-              placeholder="${saved == null ? "pts" : String(saved)}"
-            />
-            <button class="add-one" data-action="add-one" data-id="${player.id}" title="Add this player's score">+</button>
-            <div class="next">${escapeHtml(nextLabel)}</div>
+            <div class="round-head">
+              <div class="who">${escapeHtml(name)}</div>
+              <div class="next">${escapeHtml(nextLabel)}</div>
+            </div>
+            <div class="round-controls">
+              <button class="won-btn" data-action="won" data-id="${player.id}" title="Set 0 — this player won the round">0</button>
+              <input
+                type="number"
+                inputmode="numeric"
+                min="0"
+                step="1"
+                autocomplete="off"
+                enterkeyhint="done"
+                data-action="draft"
+                data-id="${player.id}"
+                value="${state.draft[player.id] ?? ""}"
+                placeholder="${saved == null ? "pts" : String(saved)}"
+              />
+              <button class="add-one" data-action="add-one" data-id="${player.id}" title="Add this player's score">+</button>
+            </div>
           </div>
         `;
       })
@@ -367,11 +413,16 @@
           <button class="btn btn-ghost" data-action="setup">Players</button>
         </div>
       </header>
-      <p class="leader">${leader ? `${escapeHtml(leader.name)} is leading with ${leader.total}` : "Everyone is out."}</p>
+      ${gameResultFrom(state.rounds) && !state.resultOpen ? `
+        <div class="result-banner">
+          <span>Someone dropped out</span>
+          <button type="button" data-action="show-result">See winner</button>
+        </div>
+      ` : `<p class="leader">${leader ? `${escapeHtml(leader.name)} is leading · ${leader.total}` : "Everyone is out."}</p>`}
       <section class="standings">${cards}</section>
       <section class="panel">
         <h2>This round</h2>
-        <p class="hint">Type one person's points and tap + or press Enter. That total updates immediately. Tap 0 for the winner.</p>
+        <p class="hint">Type their points, then tap + . That person's total updates. Tap 0 if they won the hand.</p>
         <div class="round-grid">${rows}</div>
         <div class="actions">
           <button class="btn btn-primary" data-action="add-round">Add to scoreboard</button>
@@ -379,15 +430,69 @@
           <button class="btn btn-danger" data-action="new-game">New game</button>
         </div>
       </section>
-      <section class="panel">
-        <h2>Round history</h2>
+      <details class="panel">
+        <summary>Round history</summary>
         <div class="history-wrap">
           <table>
             <thead>${historyHead}</thead>
             <tbody>${historyBody}</tbody>
           </table>
         </div>
-      </section>
+      </details>
+    `;
+  }
+
+  function renderResult() {
+    const result = gameResultFrom(state.rounds);
+    if (!state.resultOpen || !result) return "";
+    const suits = ["♠", "♥", "♦", "♣", "♠", "♥", "♦", "♣"];
+    const burst = suits
+      .map((suit, i) => {
+        const left = 6 + i * 12;
+        const delay = (i * 0.12).toFixed(2);
+        const red = suit === "♥" || suit === "♦" ? "red-suit" : "";
+        return `<span class="float-suit ${red}" style="left:${left}%; animation-delay:${delay}s">${suit}</span>`;
+      })
+      .join("");
+    const losers = result.losers
+      .map((player) => `
+        <div class="loser-row">
+          <div>
+            <div class="name">${escapeHtml(player.name)}</div>
+            <div class="pts">${player.total} pts · reached ${state.target}</div>
+          </div>
+          <span class="stamp">LOST</span>
+        </div>
+      `)
+      .join("");
+    const safe = result.safe
+      .map((player) => `
+        <div class="safe-row">
+          <span>${escapeHtml(player.name)}</span>
+          <span>${player.total}</span>
+        </div>
+      `)
+      .join("");
+    return `
+      <div class="result-overlay" role="dialog" aria-label="Game result">
+        <div class="burst" aria-hidden="true">${burst}</div>
+        <div class="result-sheet">
+          <p class="result-kicker">${result.allOut ? "Everyone dropped" : "Drop-out reached"}</p>
+          <h2 class="result-title">Game over</h2>
+          <article class="winner-card">
+            <div class="crown" aria-hidden="true">👑</div>
+            <div class="tag">Winner</div>
+            <h2>${escapeHtml(result.winner.name)}</h2>
+            <p class="score">${result.winner.total} points${result.allOut ? " · lowest score" : ""}</p>
+          </article>
+          ${result.losers.length ? `<section class="lost-block"><h3>Lost</h3>${losers}</section>` : ""}
+          ${result.safe.length ? `<section class="safe-block"><h3>Still under ${state.target}</h3>${safe}</section>` : ""}
+          <div class="result-actions">
+            <button class="btn btn-primary" data-action="new-game">Play again</button>
+            <button class="btn btn-ghost" data-action="close-result">Keep this board</button>
+          </div>
+        </div>
+      </div>
     `;
   }
 
@@ -396,7 +501,8 @@
     const toast = state.toast
       ? `<div class="toast show">${escapeHtml(state.toast)}</div>`
       : `<div class="toast"></div>`;
-    root.innerHTML = (state.screen === "setup" ? renderSetup() : renderGame()) + toast;
+    document.body.classList.toggle("locked", Boolean(state.resultOpen));
+    root.innerHTML = (state.screen === "setup" ? renderSetup() : renderGame()) + renderResult() + toast;
 
     if (state.toast) {
       window.clearTimeout(render.timer);
@@ -429,27 +535,21 @@
       const projected = pending == null ? current : saved == null ? current + pending : current - saved + pending;
       const next = el.closest(".round-row")?.querySelector(".next");
       if (next) next.textContent = pending == null ? (saved == null ? String(current) : `+${saved}`) : `${current} → ${projected}`;
-      const card = document.querySelector(`.player-card[data-player-id="${el.dataset.id}"]`);
+      const card = document.querySelector(`.player-row[data-player-id="${el.dataset.id}"]`);
       if (card) {
+        const nameBox = card.querySelector(".pname")?.parentElement;
         let chip = card.querySelector(".pending");
         if (pending == null) {
           chip?.remove();
-        } else {
+        } else if (nameBox) {
           if (!chip) {
             chip = document.createElement("div");
             chip.className = "pending";
-            card.appendChild(chip);
+            nameBox.appendChild(chip);
           }
           chip.textContent = `${saved == null ? "+" : ""}${pending} → ${projected}`;
         }
       }
-    }
-  });
-
-  document.getElementById("app").addEventListener("change", (event) => {
-    const el = event.target;
-    if (el.dataset.action === "target") {
-      setState({ target: Number(el.value) || 0 });
     }
   });
 
@@ -469,8 +569,20 @@
       setState({ players: state.players.filter((p) => p.id !== el.dataset.id) });
       return;
     }
+    if (action === "target") {
+      setState({ target: Number(el.dataset.value) || 0 });
+      return;
+    }
     if (action === "start") {
-      setState({ screen: "game", draft: {} });
+      setState(withResult(state.rounds, { screen: "game", draft: {} }));
+      return;
+    }
+    if (action === "show-result") {
+      setState({ resultOpen: true });
+      return;
+    }
+    if (action === "close-result") {
+      setState({ resultOpen: false });
       return;
     }
     if (action === "setup") {
@@ -498,8 +610,16 @@
       return;
     }
     if (action === "new-game") {
-      if (!state.rounds.length || window.confirm("Clear all rounds and start a new game with the same players?")) {
-        setState({ rounds: [], draft: {}, toast: "New game started." });
+      const fromOverlay = Boolean(state.resultOpen);
+      if (fromOverlay || !state.rounds.length || window.confirm("Clear all rounds and start a new game with the same players?")) {
+        setState({
+          screen: "game",
+          rounds: [],
+          draft: {},
+          resultOpen: false,
+          resultShownFor: "",
+          toast: "New game started.",
+        });
       }
     }
   });
