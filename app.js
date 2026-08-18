@@ -4,6 +4,12 @@
   const COLORS = ["#e8c547", "#e85d4c", "#4ecdc4", "#a78bfa", "#60a5fa", "#f472b6", "#34d399", "#fb923c", "#94a3b8", "#f0abfc"];
   const MAX_PLAYERS = 10;
   const MIN_PLAYERS = 2;
+  const TARGETS = [
+    [0, "None"],
+    [320, "320"],
+    [520, "520"],
+    [720, "720"],
+  ];
 
   const uid = () => Math.random().toString(36).slice(2, 10);
 
@@ -63,6 +69,16 @@
   function playerName(player, index) {
     const name = (player.name || "").trim();
     return name || `Player ${index + 1}`;
+  }
+
+  function renderTargetChips(compact = false) {
+    return `
+      <div class="chips ${compact ? "compact" : ""}">
+        ${TARGETS.map(([value, label]) => `
+          <button type="button" class="chip ${Number(state.target) === value ? "active" : ""}" data-action="target" data-value="${value}">${label}</button>
+        `).join("")}
+      </div>
+    `;
   }
 
   function totalsFrom(rounds) {
@@ -283,16 +299,7 @@
         <div class="setup-list">${rows}</div>
         <div class="target-row">
           <p class="hint">Drop-out score — first to reach this loses</p>
-          <div class="chips">
-            ${[
-              [0, "None"],
-              [320, "320"],
-              [520, "520"],
-              [720, "720"],
-            ].map(([value, label]) => `
-              <button type="button" class="chip ${Number(state.target) === value ? "active" : ""}" data-action="target" data-value="${value}">${label}</button>
-            `).join("")}
-          </div>
+          ${renderTargetChips()}
         </div>
         <div class="actions">
           <button class="btn btn-ghost" data-action="add-player" ${state.players.length >= MAX_PLAYERS ? "disabled" : ""}>+ Add player</button>
@@ -419,6 +426,10 @@
           <button type="button" data-action="show-result">See winner</button>
         </div>
       ` : `<p class="leader">${leader ? `${escapeHtml(leader.name)} is leading · ${leader.total}` : "Everyone is out."}</p>`}
+      <section class="panel target-panel">
+        <h2>Drop-out ${Number(state.target) ? `· ${state.target}` : "· off"}</h2>
+        ${renderTargetChips(true)}
+      </section>
       <section class="standings">${cards}</section>
       <section class="panel">
         <h2>This round</h2>
@@ -570,7 +581,13 @@
       return;
     }
     if (action === "target") {
-      setState({ target: Number(el.dataset.value) || 0 });
+      const target = Number(el.dataset.value) || 0;
+      if (target === Number(state.target)) return;
+      state = { ...state, target };
+      setState(withResult(state.rounds, {
+        target,
+        toast: target ? `Drop-out is now ${target}.` : "No drop-out limit.",
+      }));
       return;
     }
     if (action === "start") {

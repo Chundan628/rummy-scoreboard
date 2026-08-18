@@ -290,6 +290,24 @@ select:focus {
   border-color: transparent;
 }
 
+.target-panel {
+  margin-bottom: 12px;
+}
+
+.target-panel h2 {
+  margin-bottom: 10px;
+}
+
+.chips.compact {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.chips.compact .chip {
+  min-height: 44px;
+  padding: 0 4px;
+  font-size: 14px;
+}
+
 .standings {
   display: grid;
   gap: 8px;
