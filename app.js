@@ -244,9 +244,10 @@
           <div>
             <label class="hint" for="target">Drop-out score</label>
             <select id="target" data-action="target">
-              <option value="0" ${state.target === 0 ? "selected" : ""}>No limit</option>
-              <option value="101" ${state.target === 101 ? "selected" : ""}>101 points</option>
-              <option value="201" ${state.target === 201 ? "selected" : ""}>201 points</option>
+              <option value="0" ${Number(state.target) === 0 ? "selected" : ""}>No limit</option>
+              <option value="320" ${Number(state.target) === 320 ? "selected" : ""}>320 points</option>
+              <option value="520" ${Number(state.target) === 520 ? "selected" : ""}>520 points</option>
+              <option value="720" ${Number(state.target) === 720 ? "selected" : ""}>720 points</option>
             </select>
           </div>
         </div>
