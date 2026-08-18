@@ -482,53 +482,79 @@ select:focus {
   line-height: 1.45;
 }
 
-.history-wrap {
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
+.history-list {
+  display: grid;
+  gap: 12px;
 }
 
-details.panel {
-  padding: 12px 16px;
+.history-round {
+  background: rgba(8, 20, 14, 0.45);
+  border: 1px solid rgba(244, 234, 213, 0.08);
+  border-radius: 14px;
+  padding: 12px;
 }
 
-details.panel summary {
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.16em;
+.history-round.totals {
+  border-color: rgba(232, 197, 71, 0.28);
+  background: rgba(232, 197, 71, 0.08);
+}
+
+.history-round-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.history-round-head h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.history-round-head span {
+  font-size: 11px;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--gold-2);
-  list-style: none;
+  color: var(--ivory-dim);
 }
 
-details.panel summary::-webkit-details-marker {
-  display: none;
+.history-score {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) 0.8fr 0.7fr;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 0;
+  border-top: 1px solid rgba(244, 234, 213, 0.06);
+  font-size: 15px;
 }
 
-table {
-  width: 100%;
-  border-collapse: collapse;
-  min-width: 520px;
-  font-size: 13px;
-  margin-top: 10px;
+.history-score.head {
+  border-top: 0;
+  padding-top: 0;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ivory-dim);
 }
 
-th,
-td {
-  padding: 9px 8px;
-  text-align: center;
-  border-bottom: 1px solid rgba(244, 234, 213, 0.08);
-}
-
-th {
-  color: var(--gold-2);
+.hs-name {
   font-weight: 600;
-  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-td:first-child,
-th:first-child {
-  text-align: left;
+.hs-pts,
+.hs-run,
+.history-score span:nth-child(2),
+.history-score span:nth-child(3) {
+  text-align: right;
+}
+
+.hs-run {
+  color: var(--gold-2);
+  font-weight: 700;
 }
 
 .toast {

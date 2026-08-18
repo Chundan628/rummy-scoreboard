@@ -250,7 +250,19 @@
     const lines = [
       `Rummy scoreboard — ${state.rounds.length} round${state.rounds.length === 1 ? "" : "s"}`,
       ...ranked.map((p, i) => `${i + 1}. ${p.name}  ${p.total}${p.out ? "  OUT" : ""}`),
+      "",
+      "Round history",
     ];
+    const running = Object.fromEntries(state.players.map((p) => [p.id, 0]));
+    state.rounds.forEach((round, index) => {
+      lines.push(`Round ${index + 1}`);
+      state.players.forEach((player, playerIndex) => {
+        const raw = round.scores[player.id];
+        const has = Number.isFinite(Number(raw)) && raw !== "" && raw != null;
+        if (has) running[player.id] += Number(raw);
+        lines.push(`  ${playerName(player, playerIndex)}  ${has ? Number(raw) : "—"}  (total ${has ? running[player.id] : "—"})`);
+      });
+    });
     const text = lines.join("\n");
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(text).then(
@@ -394,22 +406,7 @@
       })
       .join("");
 
-    const historyHead = `
-      <tr>
-        <th>Round</th>
-        ${state.players.map((p, i) => `<th>${escapeHtml(playerName(p, i))}</th>`).join("")}
-      </tr>
-    `;
-    const historyBody = state.rounds.length
-      ? state.rounds
-          .map((round, index) => `
-            <tr>
-              <td>${index + 1}</td>
-              ${state.players.map((p) => `<td>${round.scores[p.id] ?? "—"}</td>`).join("")}
-            </tr>
-          `)
-          .join("")
-      : `<tr><td colspan="${state.players.length + 1}" class="empty">No rounds yet. Enter this hand’s scores below.</td></tr>`;
+    const historyHtml = renderHistory();
 
     return `
       <button type="button" class="back-btn" data-action="setup">← Back</button>
@@ -446,15 +443,73 @@
           <button class="btn btn-danger" data-action="new-game">New game</button>
         </div>
       </section>
-      <details class="panel">
-        <summary>Round history</summary>
-        <div class="history-wrap">
-          <table>
-            <thead>${historyHead}</thead>
-            <tbody>${historyBody}</tbody>
-          </table>
+      ${historyHtml}
+    `;
+  }
+
+  function renderHistory() {
+    if (!state.rounds.length) {
+      return `
+        <section class="panel">
+          <h2>Round history</h2>
+          <p class="empty">No scores yet. Every hand you add will show up here.</p>
+        </section>
+      `;
+    }
+
+    const running = Object.fromEntries(state.players.map((player) => [player.id, 0]));
+    const roundsHtml = state.rounds.map((round, index) => {
+      const complete = roundComplete(round);
+      const lines = state.players.map((player, playerIndex) => {
+        const raw = round.scores[player.id];
+        const has = Number.isFinite(Number(raw)) && raw !== "" && raw != null;
+        if (has) running[player.id] += Number(raw);
+        return `
+          <div class="history-score">
+            <span class="hs-name">${escapeHtml(playerName(player, playerIndex))}</span>
+            <span class="hs-pts">${has ? Number(raw) : "—"}</span>
+            <span class="hs-run">${has ? running[player.id] : "—"}</span>
+          </div>
+        `;
+      }).join("");
+      return `
+        <article class="history-round">
+          <div class="history-round-head">
+            <h3>Round ${index + 1}</h3>
+            <span>${complete ? "saved" : "in progress"}</span>
+          </div>
+          <div class="history-score head">
+            <span>Player</span>
+            <span>This hand</span>
+            <span>Total</span>
+          </div>
+          ${lines}
+        </article>
+      `;
+    }).join("");
+
+    const totalLines = state.players.map((player, playerIndex) => `
+      <div class="history-score">
+        <span class="hs-name">${escapeHtml(playerName(player, playerIndex))}</span>
+        <span class="hs-pts">${state.rounds.length} hand${state.rounds.length === 1 ? "" : "s"}</span>
+        <span class="hs-run">${running[player.id]}</span>
+      </div>
+    `).join("");
+
+    return `
+      <section class="panel">
+        <h2>Round history</h2>
+        <p class="hint">Every previous score, plus the running total after that hand.</p>
+        <div class="history-list">
+          ${roundsHtml}
+          <article class="history-round totals">
+            <div class="history-round-head">
+              <h3>Final totals</h3>
+            </div>
+            ${totalLines}
+          </article>
         </div>
-      </details>
+      </section>
     `;
   }
 
