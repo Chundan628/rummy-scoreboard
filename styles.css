@@ -63,6 +63,20 @@ select {
   padding: calc(12px + var(--safe-t)) 14px calc(24px + var(--safe-b));
 }
 
+.back-btn {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin: 0 0 10px;
+  padding: 0 4px 0 0;
+  border: 0;
+  background: transparent;
+  color: var(--gold-2);
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
 .topbar {
   display: flex;
   align-items: center;

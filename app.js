@@ -21,6 +21,7 @@
 
   const blankState = () => ({
     screen: "setup",
+    started: false,
     players: defaultPlayers(),
     rounds: [],
     target: 0,
@@ -40,6 +41,7 @@
         ...blankState(),
         ...data,
         toast: "",
+        started: Boolean(data.started || data.screen === "game" || (Array.isArray(data.rounds) && data.rounds.length)),
         draft: data.draft && typeof data.draft === "object" ? data.draft : {},
       };
     } catch {
@@ -283,27 +285,30 @@
       .join("");
 
     return `
+      ${state.started ? `<button type="button" class="back-btn" data-action="start">← Back to scoreboard</button>` : ""}
       <header class="topbar">
         <div class="brand">
           <div class="brand-mark">♠</div>
           <div>
             <h1>Rummy</h1>
-            <p>Scoreboard</p>
+            <p>Players &amp; drop-out</p>
           </div>
         </div>
         <div class="suit-row" aria-hidden="true"><span>♠</span><span class="red-suit">♥</span><span class="red-suit">♦</span><span>♣</span></div>
       </header>
       <section class="panel">
-        <h2>Players — you + friends</h2>
-        <p class="hint">Add names for everyone at the table. You can change these later.</p>
+        <h2>Players — ${state.players.length} at the table</h2>
+        <p class="hint">Add or remove people and edit names. Scores for the same names stay saved.</p>
         <div class="setup-list">${rows}</div>
+        <div class="actions">
+          <button class="btn btn-ghost" data-action="add-player" ${state.players.length >= MAX_PLAYERS ? "disabled" : ""}>+ Add player</button>
+        </div>
         <div class="target-row">
           <p class="hint">Drop-out score — first to reach this loses</p>
           ${renderTargetChips()}
         </div>
         <div class="actions">
-          <button class="btn btn-ghost" data-action="add-player" ${state.players.length >= MAX_PLAYERS ? "disabled" : ""}>+ Add player</button>
-          <button class="btn btn-primary" data-action="start">Start game</button>
+          <button class="btn btn-primary" data-action="start">${state.started ? "Back to scoreboard" : "Start game"}</button>
         </div>
       </section>
     `;
@@ -407,6 +412,7 @@
       : `<tr><td colspan="${state.players.length + 1}" class="empty">No rounds yet. Enter this hand’s scores below.</td></tr>`;
 
     return `
+      <button type="button" class="back-btn" data-action="setup">← Back</button>
       <header class="topbar">
         <div class="brand">
           <div class="brand-mark">♥</div>
@@ -417,7 +423,6 @@
         </div>
         <div class="actions">
           <button class="btn btn-ghost" data-action="copy">Copy</button>
-          <button class="btn btn-ghost" data-action="setup">Players</button>
         </div>
       </header>
       ${gameResultFrom(state.rounds) && !state.resultOpen ? `
@@ -591,7 +596,7 @@
       return;
     }
     if (action === "start") {
-      setState(withResult(state.rounds, { screen: "game", draft: {} }));
+      setState(withResult(state.rounds, { screen: "game", started: true, draft: {} }));
       return;
     }
     if (action === "show-result") {
