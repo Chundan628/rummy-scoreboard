@@ -246,11 +246,13 @@
 
   function withResult(rounds, extra = {}) {
     const key = outKeyFrom(rounds);
-    const opened = Boolean(key) && key !== state.resultShownFor;
+    const last = rounds[rounds.length - 1];
+    const complete = Boolean(last && roundComplete(last));
+    const opened = complete && Boolean(key) && key !== state.resultShownFor;
     return {
       rounds,
-      resultShownFor: key,
-      resultOpen: opened ? true : key ? state.resultOpen : false,
+      resultShownFor: complete ? key : state.resultShownFor,
+      resultOpen: opened ? true : complete && key ? state.resultOpen : false,
       ...extra,
     };
   }
@@ -296,14 +298,14 @@
     const player = state.players.find((p) => p.id === playerId);
     const name = player ? playerName(player, state.players.indexOf(player)) : "Player";
     const finished = roundComplete(rounds[index]);
-    const over = Number(state.target) > 0 && totalsFrom(rounds)[playerId] >= Number(state.target);
-    const nextDeal = finished ? nextJokerId() : state.jokerChooserId;
-    const nextRoles = finished ? dealRoles(nextDeal) : null;
+    const gameOver = finished && Boolean(gameResultFrom(rounds));
+    const nextDeal = finished && !gameOver ? nextJokerId() : state.jokerChooserId;
+    const nextRoles = finished && !gameOver ? dealRoles(nextDeal) : null;
     setState(withResult(rounds, {
       draft,
       jokerChooserId: nextDeal,
-      toast: over
-        ? `${name} reached ${state.target}.`
+      toast: gameOver
+        ? ""
         : finished
           ? `Round ${index + 1} done. ${nextRoles.joker} chooses joker. ${nextRoles.starter} starts.`
           : `${name} ${replacing ? "updated to" : "+"} ${value}. Total is now ${totalsFrom(rounds)[playerId]}.`,
@@ -322,12 +324,13 @@
       }
       rounds[index].scores[player.id] = value;
     }
-    const nextDeal = nextJokerId();
-    const nextRoles = dealRoles(nextDeal);
+    const gameOver = Boolean(gameResultFrom(rounds));
+    const nextDeal = gameOver ? state.jokerChooserId : nextJokerId();
+    const nextRoles = gameOver ? null : dealRoles(nextDeal);
     setState(withResult(rounds, {
       draft: {},
       jokerChooserId: nextDeal,
-      toast: `Round added. ${nextRoles.joker} chooses joker. ${nextRoles.starter} starts.`,
+      toast: gameOver ? "" : `Round added. ${nextRoles.joker} chooses joker. ${nextRoles.starter} starts.`,
     }));
   }
 
@@ -523,15 +526,14 @@
     paintSheetTotals();
     const nowExists = Boolean(state.rounds[roundIndex]);
     const nowComplete = nowExists && roundComplete(state.rounds[roundIndex]);
-    const player = state.players.find((item) => item.id === playerId);
-    const name = player ? playerName(player, state.players.indexOf(player)) : "Player";
-    const total = totals()[playerId] || 0;
-    const over = Number(state.target) > 0 && total >= Number(state.target);
-    if (over && !state.resultOpen) {
-      setState(withResult(state.rounds, { toast: `${name} reached ${state.target}.` }));
-      return;
-    }
     if (nowComplete && !wasComplete) {
+      const gameOver = Boolean(gameResultFrom(state.rounds));
+      if (gameOver) {
+        window.setTimeout(() => {
+          setState(withResult(state.rounds, { toast: "" }));
+        }, 350);
+        return;
+      }
       const nextDeal = nextJokerId();
       const nextRoles = dealRoles(nextDeal);
       setState(withResult(state.rounds, {
@@ -760,26 +762,37 @@
       const bits = ["🎉", "🎊", "✨", "💥", "🎈"];
       return `<span class="popper" style="--x:${(i * 7.3) % 100}%; --d:${((i % 10) * 0.08).toFixed(2)}s; --t:${(1.8 + (i % 5) * 0.2).toFixed(2)}s">${bits[i % 5]}</span>`;
     }).join("");
+    const tears = Array.from({ length: 8 }, (_, i) =>
+      `<span class="tear" style="--tx:${-18 + i * 6}px; --d:${(0.1 * i).toFixed(2)}s"></span>`
+    ).join("");
     return `
       <div class="result-overlay roast" role="dialog" aria-label="Game result">
         <div class="popper-layer" aria-hidden="true">${poppers}</div>
         <button type="button" class="roast-close" data-action="close-result">Close</button>
         <div class="roast-stage">
-          <p class="result-kicker">Drop-out reached</p>
-          <div class="roast-pair">
-            <figure class="roast-winner">
-              ${faceHtml(winnerFull, "laugh", "roast-face laugh")}
+          <p class="result-kicker">Hand complete</p>
+          <div class="stage-3d" aria-hidden="false">
+            <div class="stage-floor"></div>
+            <figure class="actor winner">
+              <div class="actor-body">
+                ${faceHtml(winnerFull, "laugh", "roast-face")}
+              </div>
+              <div class="actor-shadow"></div>
               <figcaption>${escapeHtml(result.winner.name)} wins</figcaption>
             </figure>
             ${loserFull ? `
-              <figure class="roast-loser">
-                ${faceHtml(loserFull, "lose", "roast-face lose")}
+              <figure class="actor loser">
+                <div class="actor-body">
+                  ${faceHtml(loserFull, "lose", "roast-face")}
+                  <div class="tear-box">${tears}</div>
+                </div>
+                <div class="actor-shadow sad"></div>
                 <figcaption>${escapeHtml(loserFull.name)} lost · ${loserFull.total}</figcaption>
               </figure>
             ` : ""}
           </div>
           <p class="roast-line">${loserFull
-            ? `${escapeHtml(result.winner.name)} is laughing at ${escapeHtml(loserFull.name)}!`
+            ? `${escapeHtml(result.winner.name)} jumps. ${escapeHtml(loserFull.name)} is out.`
             : `${escapeHtml(result.winner.name)} takes it with ${result.winner.total} points.`}</p>
           <div class="result-actions">
             <button class="btn btn-primary" data-action="new-game">Play again</button>
