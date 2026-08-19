@@ -362,8 +362,8 @@
         <ol class="basics">
           <li><strong>Add players</strong> — put in everyone's name. You can add or remove people anytime.</li>
           <li><strong>Pick a drop-out</strong> — 320, 520, or 720. First person to reach it loses.</li>
-          <li><strong>Enter each score</strong> — after a hand, type that person's points and tap +. Only their total goes up.</li>
-          <li><strong>Check history</strong> — every individual score stays listed under that person's name.</li>
+          <li><strong>Enter scores in the table</strong> — type each person's points for that hand. Their total adds up automatically.</li>
+          <li><strong>Read the sheet</strong> — every hand stays in the table, with a TOTAL row at the bottom.</li>
           <li><strong>Joker &amp; start</strong> — one player chooses the joker. The player before them picks the open card and starts.</li>
         </ol>
       </section>
@@ -436,88 +436,138 @@
     `;
   }
 
-  function renderGame() {
-    const ranked = standings();
-    const sums = totals();
-    const leader = ranked.find((p) => !p.out);
-    const cards = ranked
-      .map((player, place) => {
-        const suit = SUITS[player.index % SUITS.length];
-        const red = suit === "♥" || suit === "♦" ? "red-suit" : "";
-        const pending = parseScore(state.draft[player.id]);
-        const open = openRoundIndex();
-        const savedThisRound = open >= 0 && Number.isFinite(Number(state.rounds[open].scores[player.id]))
-          ? Number(state.rounds[open].scores[player.id])
-          : null;
-        const projected = pending == null
-          ? null
-          : savedThisRound == null
-            ? player.total + pending
-            : player.total - savedThisRound + pending;
-        const pendingHtml =
-          pending == null
-            ? (player.out ? `<div class="pending">Reached ${state.target}</div>` : "")
-            : `<div class="pending">${savedThisRound == null ? "+" : ""}${pending} → ${projected}</div>`;
-        return `
-          <article class="player-row ${place === 0 && !player.out ? "winning" : ""} ${player.out ? "out" : ""}" data-player-id="${player.id}">
-            <span class="suit ${red}">${suit}</span>
-            <div>
-              <div class="pname">${escapeHtml(player.name)}</div>
-              ${pendingHtml}
-            </div>
-            <div class="ptotal">${player.total}</div>
-            <span class="place">${player.out ? "Lost" : place === 0 ? "Lead" : `${place + 1}${["st", "nd", "rd"][place] || "th"}`}</span>
-          </article>
-        `;
-      })
-      .join("");
+  function writeCell(roundIndex, playerId, raw) {
+    const value = parseScore(raw);
+    const rounds = state.rounds.map((round) => ({ ...round, scores: { ...round.scores } }));
+    while (rounds.length <= roundIndex) {
+      rounds.push({ id: uid(), scores: {} });
+    }
+    if (value == null) delete rounds[roundIndex].scores[playerId];
+    else rounds[roundIndex].scores[playerId] = value;
+    while (rounds.length && Object.keys(rounds[rounds.length - 1].scores).length === 0) {
+      rounds.pop();
+    }
+    state.rounds = rounds;
+    save();
+  }
 
-    const openIndex = openRoundIndex();
-    const openRound = openIndex >= 0 ? state.rounds[openIndex] : null;
-    const rows = state.players
-      .map((player, index) => {
-        const name = playerName(player, index);
-        const current = sums[player.id];
-        const saved = openRound && Number.isFinite(Number(openRound.scores[player.id]))
-          ? Number(openRound.scores[player.id])
-          : null;
-        const pending = parseScore(state.draft[player.id]);
-        let nextLabel = String(current);
-        if (pending != null) {
-          const projected = saved == null ? current + pending : current - saved + pending;
-          nextLabel = `${current} → ${projected}`;
-        } else if (saved != null) {
-          nextLabel = `+${saved}`;
-        }
-        return `
-          <div class="round-row ${saved == null ? "" : "saved"}">
-            <div class="round-head">
-              <div class="who">${escapeHtml(name)}</div>
-              <div class="next">${escapeHtml(nextLabel)}</div>
-            </div>
-            <div class="round-controls">
-              <button class="won-btn" data-action="won" data-id="${player.id}" title="Set 0 — this player won the round">0</button>
+  function paintSheetTotals() {
+    const sums = totals();
+    const ranked = standings();
+    state.players.forEach((player) => {
+      const cell = document.querySelector(`[data-total="${player.id}"]`);
+      if (cell) cell.textContent = String(sums[player.id] || 0);
+      document.querySelectorAll(`[data-col="${player.id}"]`).forEach((node) => {
+        node.classList.toggle("out", ranked.some((row) => row.id === player.id && row.out));
+        node.classList.toggle("lead-col", ranked[0] && ranked[0].id === player.id && !ranked[0].out);
+      });
+    });
+    const leader = ranked.find((player) => !player.out);
+    const lead = document.querySelector(".leader");
+    if (lead) {
+      lead.textContent = leader ? `${leader.name} is leading · ${leader.total}` : "Everyone is out.";
+    }
+  }
+
+  function commitCell(roundIndex, playerId, raw) {
+    const existed = Boolean(state.rounds[roundIndex]);
+    const wasComplete = existed && roundComplete(state.rounds[roundIndex]);
+    writeCell(roundIndex, playerId, raw);
+    paintSheetTotals();
+    const nowExists = Boolean(state.rounds[roundIndex]);
+    const nowComplete = nowExists && roundComplete(state.rounds[roundIndex]);
+    const player = state.players.find((item) => item.id === playerId);
+    const name = player ? playerName(player, state.players.indexOf(player)) : "Player";
+    const total = totals()[playerId] || 0;
+    const over = Number(state.target) > 0 && total >= Number(state.target);
+    if (over && !state.resultOpen) {
+      setState(withResult(state.rounds, { toast: `${name} reached ${state.target}.` }));
+      return;
+    }
+    if (nowComplete && !wasComplete) {
+      const nextDeal = nextJokerId();
+      const nextRoles = dealRoles(nextDeal);
+      setState(withResult(state.rounds, {
+        jokerChooserId: nextDeal,
+        toast: `Round ${roundIndex + 1} done. ${nextRoles.joker} chooses joker. ${nextRoles.starter} starts.`,
+      }));
+    }
+  }
+
+  function renderSheet() {
+    const sums = totals();
+    const ranked = standings();
+    const leaderId = ranked[0] && !ranked[0].out ? ranked[0].id : "";
+    const outIds = new Set(ranked.filter((player) => player.out).map((player) => player.id));
+    const rows = [...state.rounds];
+    if (!rows.length || roundComplete(rows[rows.length - 1])) {
+      rows.push({ id: "next", scores: {} });
+    }
+    const head = `
+      <tr>
+        <th class="sheet-corner">Hand</th>
+        ${state.players.map((player, index) => `
+          <th data-col="${player.id}" class="${player.id === leaderId ? "lead-col" : ""} ${outIds.has(player.id) ? "out" : ""}">${escapeHtml(playerName(player, index))}</th>
+        `).join("")}
+      </tr>
+    `;
+    const body = rows.map((round, roundIndex) => `
+      <tr>
+        <th class="round-lab">${round.id === "next" ? roundIndex + 1 : roundIndex + 1}</th>
+        ${state.players.map((player) => {
+          const value = scoreValue(round, player.id);
+          return `
+            <td data-col="${player.id}" class="${player.id === leaderId ? "lead-col" : ""} ${outIds.has(player.id) ? "out" : ""}">
               <input
                 type="number"
                 inputmode="numeric"
                 min="0"
                 step="1"
                 autocomplete="off"
-                enterkeyhint="done"
-                data-action="draft"
+                enterkeyhint="next"
+                data-action="cell"
                 data-id="${player.id}"
-                value="${state.draft[player.id] ?? ""}"
-                placeholder="${saved == null ? "pts" : String(saved)}"
+                data-round="${roundIndex}"
+                value="${value == null ? "" : value}"
+                placeholder="—"
               />
-              <button class="add-one" data-action="add-one" data-id="${player.id}" title="Add this player's score">+</button>
-            </div>
-          </div>
-        `;
-      })
-      .join("");
+            </td>
+          `;
+        }).join("")}
+      </tr>
+    `).join("");
+    const foot = `
+      <tr>
+        <th class="round-lab">TOTAL</th>
+        ${state.players.map((player) => `
+          <td data-col="${player.id}" data-total="${player.id}" class="total-cell ${player.id === leaderId ? "lead-col" : ""} ${outIds.has(player.id) ? "out" : ""}">${sums[player.id] || 0}</td>
+        `).join("")}
+      </tr>
+    `;
+    return `
+      <section class="panel sheet-panel">
+        <h2>Score sheet</h2>
+        <p class="hint">Type each person's points. The TOTAL row adds up by itself.</p>
+        <div class="sheet-wrap">
+          <table class="sheet">
+            <thead>${head}</thead>
+            <tbody>${body}</tbody>
+            <tfoot>${foot}</tfoot>
+          </table>
+        </div>
+        <div class="actions">
+          <button class="btn btn-ghost" data-action="undo" ${state.rounds.length ? "" : "disabled"}>Undo last hand</button>
+          <button class="btn btn-danger" data-action="new-game">New game</button>
+        </div>
+      </section>
+    `;
+  }
 
-    const historyHtml = renderHistory();
+  function renderGame() {
+    const ranked = standings();
+    const leader = ranked.find((p) => !p.out);
     const dealHtml = renderDealCircle();
+    const sheetHtml = renderSheet();
 
     return `
       <header class="topbar">
@@ -544,18 +594,7 @@
         <h2>Drop-out ${Number(state.target) ? `· ${state.target}` : "· off"}</h2>
         ${renderTargetChips(true)}
       </section>
-      <section class="standings">${cards}</section>
-      <section class="panel">
-        <h2>This round</h2>
-        <p class="hint">Type their points, then tap + . That person's total updates. Tap 0 if they won the hand.</p>
-        <div class="round-grid">${rows}</div>
-        <div class="actions">
-          <button class="btn btn-primary" data-action="add-round">Add to scoreboard</button>
-          <button class="btn btn-ghost" data-action="undo" ${state.rounds.length ? "" : "disabled"}>Undo last round</button>
-          <button class="btn btn-danger" data-action="new-game">New game</button>
-        </div>
-      </section>
-      ${historyHtml}
+      ${sheetHtml}
     `;
   }
 
@@ -766,6 +805,23 @@
       save();
       return;
     }
+    if (action === "cell") {
+      const sums = Object.fromEntries(state.players.map((player) => [player.id, 0]));
+      document.querySelectorAll('input[data-action="cell"]').forEach((input) => {
+        const value = parseScore(input.value);
+        if (value != null) sums[input.dataset.id] += value;
+      });
+      state.players.forEach((player) => {
+        const cell = document.querySelector(`[data-total="${player.id}"]`);
+        if (cell) cell.textContent = String(sums[player.id] || 0);
+      });
+      const ranked = [...state.players]
+        .map((player, index) => ({ id: player.id, name: playerName(player, index), total: sums[player.id] || 0 }))
+        .sort((a, b) => a.total - b.total);
+      const lead = document.querySelector(".leader");
+      if (lead && ranked[0]) lead.textContent = `${ranked[0].name} is leading · ${ranked[0].total}`;
+      return;
+    }
     if (action === "draft") {
       state.draft = { ...state.draft, [el.dataset.id]: el.value };
       save();
@@ -794,6 +850,12 @@
         }
       }
     }
+  });
+
+  document.getElementById("app").addEventListener("change", (event) => {
+    const el = event.target;
+    if (el.dataset.action !== "cell") return;
+    commitCell(Number(el.dataset.round), el.dataset.id, el.value);
   });
 
   document.getElementById("app").addEventListener("click", (event) => {
@@ -939,6 +1001,19 @@
   document.getElementById("app").addEventListener("keydown", (event) => {
     if (event.key !== "Enter") return;
     const el = event.target;
+    if (el.dataset.action === "cell") {
+      event.preventDefault();
+      const inputs = [...document.querySelectorAll('input[data-action="cell"]')];
+      const index = inputs.indexOf(el);
+      commitCell(Number(el.dataset.round), el.dataset.id, el.value);
+      requestAnimationFrame(() => {
+        const nextInputs = [...document.querySelectorAll('input[data-action="cell"]')];
+        const next = nextInputs[index + 1] || nextInputs.find((input) => input.value === "");
+        next?.focus();
+        next?.select();
+      });
+      return;
+    }
     if (el.dataset.action !== "draft") return;
     event.preventDefault();
     const inputs = [...document.querySelectorAll('input[data-action="draft"]')];
