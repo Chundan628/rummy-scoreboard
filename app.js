@@ -310,7 +310,6 @@
       </section>
       <div class="actions home-actions">
         <button class="btn btn-primary" data-action="goto-setup">${inProgress ? "Edit players" : "Set up players"}</button>
-        ${inProgress ? `<button class="btn btn-ghost" data-action="start">Continue game</button>` : ""}
         ${inProgress ? `<button class="btn btn-danger" data-action="home-new">New game</button>` : ""}
       </div>
     `;
@@ -339,7 +338,7 @@
       .join("");
 
     return `
-      <button type="button" class="back-btn" data-action="${state.started ? "start" : "home"}">${state.started ? "← Back to scoreboard" : "← Home"}</button>
+      <button type="button" class="back-btn" data-action="${state.started ? "tab-board" : "home"}">${state.started ? "← Back to scoreboard" : "← Home"}</button>
       <header class="topbar">
         <div class="brand">
           <div class="brand-mark">♠</div>
@@ -451,7 +450,7 @@
     const historyHtml = renderHistory();
 
     return `
-      <button type="button" class="back-btn" data-action="setup">← Back</button>
+      <button type="button" class="back-btn" data-action="goto-setup">← Players</button>
       <header class="topbar">
         <div class="brand">
           <div class="brand-mark">♥</div>
@@ -580,6 +579,22 @@
     `;
   }
 
+  function renderNav() {
+    const onHome = state.screen === "home";
+    return `
+      <nav class="tabbar" aria-label="Main">
+        <button type="button" class="tab ${onHome ? "active" : ""}" data-action="home">
+          <span class="tab-icon">⌂</span>
+          <span>Home</span>
+        </button>
+        <button type="button" class="tab ${onHome ? "" : "active"}" data-action="tab-board">
+          <span class="tab-icon">♠</span>
+          <span>Scoreboard</span>
+        </button>
+      </nav>
+    `;
+  }
+
   function render() {
     const root = document.getElementById("app");
     const toast = state.toast
@@ -591,7 +606,7 @@
       : state.screen === "setup"
         ? renderSetup()
         : renderGame();
-    root.innerHTML = page + renderResult() + toast;
+    root.innerHTML = page + renderNav() + renderResult() + toast;
 
     if (state.toast) {
       window.clearTimeout(render.timer);
@@ -670,6 +685,10 @@
     }
     if (action === "home") {
       setState({ screen: "home", resultOpen: false });
+      return;
+    }
+    if (action === "tab-board") {
+      setState(withResult(state.rounds, { screen: "game", started: true, draft: state.draft, resultOpen: false }));
       return;
     }
     if (action === "goto-setup") {
