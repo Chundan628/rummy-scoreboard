@@ -285,7 +285,7 @@ select {
 
 .stage-3d {
   position: relative;
-  height: 300px;
+  height: 340px;
   margin: 8px 0 12px;
   perspective: 900px;
   perspective-origin: 50% 35%;
@@ -341,6 +341,17 @@ select {
   object-position: center 18%;
   box-shadow: 0 18px 28px rgba(0, 0, 0, 0.4);
   backface-visibility: hidden;
+}
+
+.roast-face.body3d {
+  height: 250px;
+  max-width: 200px;
+  object-fit: contain;
+  object-position: center bottom;
+  background: transparent;
+  border-radius: 16px;
+  box-shadow: none;
+  filter: drop-shadow(0 16px 18px rgba(0, 0, 0, 0.45));
 }
 
 .roast-face.face-fallback {

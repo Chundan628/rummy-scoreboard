@@ -16,11 +16,11 @@
   const uid = () => Math.random().toString(36).slice(2, 10);
 
   const FIXED_ROSTER = [
-    { id: "navaneeth", name: "Navaneeth", photo: "photos/navaneeth.jpg", laugh: "photos/navaneeth-laugh.jpg", lose: "photos/navaneeth-lose.jpg" },
-    { id: "sharan", name: "Sharan", photo: "photos/sharan.jpg", laugh: "photos/sharan-laugh.jpg", lose: "photos/sharan-lose.jpg" },
-    { id: "muthus", name: "Muthus", photo: "photos/muthus.jpg?v=19", laugh: "photos/muthus-laugh.jpg?v=19", lose: "photos/muthus-lose.jpg?v=19" },
-    { id: "sreenath", name: "Sreenath", photo: "photos/sreenath.jpg", laugh: "photos/sreenath-laugh.jpg", lose: "photos/sreenath-lose.jpg" },
-    { id: "kiran", name: "Kiran", photo: "photos/kiran.jpg", laugh: "photos/kiran-laugh.jpg", lose: "photos/kiran-lose.jpg" },
+    { id: "navaneeth", name: "Navaneeth", photo: "photos/navaneeth.jpg", laugh: "photos/navaneeth-laugh.jpg", lose: "photos/navaneeth-lose.jpg", jump3d: "photos/3d/navaneeth-jump.jpg", cry3d: "photos/3d/navaneeth-cry.jpg" },
+    { id: "sharan", name: "Sharan", photo: "photos/sharan.jpg", laugh: "photos/sharan-laugh.jpg", lose: "photos/sharan-lose.jpg", jump3d: "photos/3d/sharan-jump.jpg", cry3d: "photos/3d/sharan-cry.jpg" },
+    { id: "muthus", name: "Muthus", photo: "photos/muthus.jpg?v=19", laugh: "photos/muthus-laugh.jpg?v=19", lose: "photos/muthus-lose.jpg?v=19", jump3d: "photos/3d/muthus-jump.jpg", cry3d: "photos/3d/muthus-cry.jpg" },
+    { id: "sreenath", name: "Sreenath", photo: "photos/sreenath.jpg", laugh: "photos/sreenath-laugh.jpg", lose: "photos/sreenath-lose.jpg", jump3d: "photos/3d/sreenath-jump.jpg", cry3d: "photos/3d/sreenath-cry.jpg" },
+    { id: "kiran", name: "Kiran", photo: "photos/kiran.jpg", laugh: "photos/kiran-laugh.jpg", lose: "photos/kiran-lose.jpg", jump3d: "photos/3d/kiran-jump.jpg", cry3d: "photos/3d/kiran-cry.jpg" },
   ];
 
   const defaultPlayers = () => FIXED_ROSTER.map((person) => ({ ...person }));
@@ -775,7 +775,7 @@
             <div class="stage-floor"></div>
             <figure class="actor winner">
               <div class="actor-body">
-                ${faceHtml(winnerFull, "laugh", "roast-face")}
+                ${faceHtml(winnerFull, "jump3d", "roast-face body3d")}
               </div>
               <div class="actor-shadow"></div>
               <figcaption>${escapeHtml(result.winner.name)} wins</figcaption>
@@ -783,7 +783,7 @@
             ${loserFull ? `
               <figure class="actor loser">
                 <div class="actor-body">
-                  ${faceHtml(loserFull, "lose", "roast-face")}
+                  ${faceHtml(loserFull, "cry3d", "roast-face body3d")}
                   <div class="tear-box">${tears}</div>
                 </div>
                 <div class="actor-shadow sad"></div>
