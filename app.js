@@ -29,6 +29,7 @@
     toast: "",
     resultOpen: false,
     resultShownFor: "",
+    jokerChooserId: null,
   });
 
   function loadState() {
@@ -37,14 +38,18 @@
       if (!raw) return blankState();
       const data = JSON.parse(raw);
       if (!Array.isArray(data.players) || data.players.length < MIN_PLAYERS) return blankState();
+      const started = Boolean(data.started || data.screen === "game" || (Array.isArray(data.rounds) && data.rounds.length));
+      const players = data.players;
+      const savedJoker = players.some((player) => player.id === data.jokerChooserId)
+        ? data.jokerChooserId
+        : null;
       return {
         ...blankState(),
         ...data,
         toast: "",
-        started: Boolean(data.started || data.screen === "game" || (Array.isArray(data.rounds) && data.rounds.length)),
-        screen: (data.started || (Array.isArray(data.rounds) && data.rounds.length))
-          ? (data.screen || "game")
-          : "home",
+        started,
+        screen: started ? (data.screen || "game") : "home",
+        jokerChooserId: savedJoker || (started ? players[Math.floor(Math.random() * players.length)].id : null),
         draft: data.draft && typeof data.draft === "object" ? data.draft : {},
       };
     } catch {
@@ -74,6 +79,53 @@
   function playerName(player, index) {
     const name = (player.name || "").trim();
     return name || `Player ${index + 1}`;
+  }
+
+  function pickRandomJoker() {
+    return state.players[Math.floor(Math.random() * state.players.length)].id;
+  }
+
+  function jokerIndex(chooserId = state.jokerChooserId) {
+    const index = state.players.findIndex((player) => player.id === chooserId);
+    return index < 0 ? 0 : index;
+  }
+
+  function starterIndex(chooserId = state.jokerChooserId) {
+    const count = state.players.length;
+    return (jokerIndex(chooserId) - 1 + count) % count;
+  }
+
+  function dealRoles(chooserId = state.jokerChooserId) {
+    const jokerI = jokerIndex(chooserId);
+    const startI = starterIndex(chooserId);
+    return {
+      joker: playerName(state.players[jokerI], jokerI),
+      starter: playerName(state.players[startI], startI),
+      jokerId: state.players[jokerI].id,
+      starterId: state.players[startI].id,
+    };
+  }
+
+  function withJoker(extra = {}) {
+    const valid = state.jokerChooserId && state.players.some((player) => player.id === state.jokerChooserId);
+    if (valid) return extra;
+    const jokerChooserId = pickRandomJoker();
+    const roles = dealRoles(jokerChooserId);
+    return {
+      ...extra,
+      jokerChooserId,
+      toast: extra.toast || `${roles.joker} chooses the joker. ${roles.starter} starts by picking the open card.`,
+    };
+  }
+
+  function nextJokerId() {
+    const index = (jokerIndex() + 1) % state.players.length;
+    return state.players[index].id;
+  }
+
+  function prevJokerId() {
+    const index = (jokerIndex() - 1 + state.players.length) % state.players.length;
+    return state.players[index].id;
   }
 
   function renderTargetChips(compact = false) {
@@ -204,12 +256,15 @@
     const name = player ? playerName(player, state.players.indexOf(player)) : "Player";
     const finished = roundComplete(rounds[index]);
     const over = Number(state.target) > 0 && totalsFrom(rounds)[playerId] >= Number(state.target);
+    const nextDeal = finished ? nextJokerId() : state.jokerChooserId;
+    const nextRoles = finished ? dealRoles(nextDeal) : null;
     setState(withResult(rounds, {
       draft,
+      jokerChooserId: nextDeal,
       toast: over
         ? `${name} reached ${state.target}.`
         : finished
-          ? `${name} ${replacing ? "updated to" : "+"} ${value}. Round ${index + 1} complete.`
+          ? `Round ${index + 1} done. ${nextRoles.joker} chooses joker. ${nextRoles.starter} starts.`
           : `${name} ${replacing ? "updated to" : "+"} ${value}. Total is now ${totalsFrom(rounds)[playerId]}.`,
     }));
     return true;
@@ -226,16 +281,24 @@
       }
       rounds[index].scores[player.id] = value;
     }
+    const nextDeal = nextJokerId();
+    const nextRoles = dealRoles(nextDeal);
     setState(withResult(rounds, {
       draft: {},
-      toast: "Round added. Totals updated.",
+      jokerChooserId: nextDeal,
+      toast: `Round added. ${nextRoles.joker} chooses joker. ${nextRoles.starter} starts.`,
     }));
   }
 
   function undoRound() {
     if (!state.rounds.length) return;
+    const last = state.rounds[state.rounds.length - 1];
+    const wasComplete = roundComplete(last);
     const rounds = state.rounds.slice(0, -1);
-    setState(withResult(rounds, { toast: "Last round removed." }));
+    setState(withResult(rounds, {
+      jokerChooserId: wasComplete ? prevJokerId() : state.jokerChooserId,
+      toast: "Last round removed.",
+    }));
   }
 
   function showToast(message) {
@@ -297,6 +360,7 @@
           <li><strong>Pick a drop-out</strong> — 320, 520, or 720. First person to reach it loses.</li>
           <li><strong>Enter each score</strong> — after a hand, type that person's points and tap +. Only their total goes up.</li>
           <li><strong>Check history</strong> — every individual score stays listed under that person's name.</li>
+          <li><strong>Joker &amp; start</strong> — one player chooses the joker. The player before them picks the open card and starts.</li>
         </ol>
       </section>
       <section class="panel">
@@ -306,6 +370,7 @@
           <li>Everyone else gets the points from that hand.</li>
           <li>Lowest total is leading.</li>
           <li>When someone hits the drop-out, the lowest remaining score wins.</li>
+          <li>If 4 players sit in a circle and player 1 chooses the joker, player 4 starts.</li>
         </ul>
       </section>
       <div class="actions home-actions">
@@ -448,21 +513,23 @@
       .join("");
 
     const historyHtml = renderHistory();
+    const dealHtml = renderDealCircle();
 
     return `
-      <button type="button" class="back-btn" data-action="goto-setup">← Players</button>
       <header class="topbar">
         <div class="brand">
           <div class="brand-mark">♥</div>
           <div>
-            <h1>Rummy</h1>
+            <h1>Scoreboard</h1>
             <p>${state.rounds.length} round${state.rounds.length === 1 ? "" : "s"}</p>
           </div>
         </div>
         <div class="actions">
+          <button class="btn btn-ghost" data-action="goto-setup">Players</button>
           <button class="btn btn-ghost" data-action="copy">Copy</button>
         </div>
       </header>
+      ${dealHtml}
       ${gameResultFrom(state.rounds) && !state.resultOpen ? `
         <div class="result-banner">
           <span>Someone dropped out</span>
@@ -485,6 +552,43 @@
         </div>
       </section>
       ${historyHtml}
+    `;
+  }
+
+  function renderDealCircle() {
+    const chooserId = state.jokerChooserId && state.players.some((p) => p.id === state.jokerChooserId)
+      ? state.jokerChooserId
+      : state.players[0].id;
+    const roles = dealRoles(chooserId);
+    const count = state.players.length;
+    const seats = state.players.map((player, index) => {
+      const isJoker = player.id === roles.jokerId;
+      const isStart = player.id === roles.starterId;
+      const label = isJoker ? "Joker" : isStart ? "Start" : "";
+      return `
+        <div class="seat ${isJoker ? "joker" : ""} ${isStart ? "start" : ""}" style="--i:${index}; --n:${count}">
+          <span class="seat-name">${escapeHtml(playerName(player, index))}</span>
+          ${label ? `<span class="seat-tag">${label}</span>` : ""}
+        </div>
+      `;
+    }).join("");
+    return `
+      <section class="panel table-panel">
+        <h2>This hand</h2>
+        <p class="hint"><strong>${escapeHtml(roles.joker)}</strong> chooses the joker. The player before — <strong>${escapeHtml(roles.starter)}</strong> — picks the open card and starts.</p>
+        <div class="table-wrap" style="--n:${count}">
+          <div class="table-core">
+            <span class="core-kicker">Table</span>
+            <span class="core-line">${escapeHtml(roles.joker)} → joker</span>
+            <span class="core-line">${escapeHtml(roles.starter)} → start</span>
+          </div>
+          ${seats}
+        </div>
+        <div class="actions">
+          <button class="btn btn-ghost" data-action="next-deal">Next deal</button>
+          <button class="btn btn-ghost" data-action="random-deal">Random first player</button>
+        </div>
+      </section>
     `;
   }
 
@@ -583,14 +687,8 @@
     const onHome = state.screen === "home";
     return `
       <nav class="tabbar" aria-label="Main">
-        <button type="button" class="tab ${onHome ? "active" : ""}" data-action="home">
-          <span class="tab-icon">⌂</span>
-          <span>Home</span>
-        </button>
-        <button type="button" class="tab ${onHome ? "" : "active"}" data-action="tab-board">
-          <span class="tab-icon">♠</span>
-          <span>Scoreboard</span>
-        </button>
+        <button type="button" class="tab ${onHome ? "active" : ""}" data-action="home">Home</button>
+        <button type="button" class="tab ${onHome ? "" : "active"}" data-action="tab-board">Scoreboard</button>
       </nav>
     `;
   }
@@ -606,7 +704,7 @@
       : state.screen === "setup"
         ? renderSetup()
         : renderGame();
-    root.innerHTML = page + renderNav() + renderResult() + toast;
+    root.innerHTML = renderNav() + page + renderResult() + toast;
 
     if (state.toast) {
       window.clearTimeout(render.timer);
@@ -670,7 +768,11 @@
     }
     if (action === "remove-player") {
       if (state.players.length <= MIN_PLAYERS) return;
-      setState({ players: state.players.filter((p) => p.id !== el.dataset.id) });
+      const players = state.players.filter((p) => p.id !== el.dataset.id);
+      const jokerChooserId = players.some((p) => p.id === state.jokerChooserId)
+        ? state.jokerChooserId
+        : players[Math.floor(Math.random() * players.length)].id;
+      setState({ players, jokerChooserId });
       return;
     }
     if (action === "target") {
@@ -688,7 +790,12 @@
       return;
     }
     if (action === "tab-board") {
-      setState(withResult(state.rounds, { screen: "game", started: true, draft: state.draft, resultOpen: false }));
+      setState(withResult(state.rounds, withJoker({
+        screen: "game",
+        started: true,
+        draft: state.draft,
+        resultOpen: false,
+      })));
       return;
     }
     if (action === "goto-setup") {
@@ -704,13 +811,32 @@
           draft: {},
           resultOpen: false,
           resultShownFor: "",
+          jokerChooserId: null,
           toast: "New game. Add names and pick a drop-out.",
         });
       }
       return;
     }
     if (action === "start") {
-      setState(withResult(state.rounds, { screen: "game", started: true, draft: {} }));
+      setState(withResult(state.rounds, withJoker({ screen: "game", started: true, draft: {} })));
+      return;
+    }
+    if (action === "next-deal") {
+      const jokerChooserId = nextJokerId();
+      const roles = dealRoles(jokerChooserId);
+      setState({
+        jokerChooserId,
+        toast: `${roles.joker} chooses the joker. ${roles.starter} starts by picking the open card.`,
+      });
+      return;
+    }
+    if (action === "random-deal") {
+      const jokerChooserId = pickRandomJoker();
+      const roles = dealRoles(jokerChooserId);
+      setState({
+        jokerChooserId,
+        toast: `${roles.joker} chooses the joker. ${roles.starter} starts by picking the open card.`,
+      });
       return;
     }
     if (action === "show-result") {
@@ -748,13 +874,16 @@
     if (action === "new-game") {
       const fromOverlay = Boolean(state.resultOpen);
       if (fromOverlay || !state.rounds.length || window.confirm("Clear all rounds and start a new game with the same players?")) {
+        const jokerChooserId = pickRandomJoker();
+        const roles = dealRoles(jokerChooserId);
         setState({
           screen: "game",
           rounds: [],
           draft: {},
           resultOpen: false,
           resultShownFor: "",
-          toast: "New game started.",
+          jokerChooserId,
+          toast: `New game. ${roles.joker} chooses the joker. ${roles.starter} starts.`,
         });
       }
     }
