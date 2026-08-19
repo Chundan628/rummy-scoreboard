@@ -637,6 +637,66 @@ select:focus {
   margin: 8px auto 4px;
 }
 
+.deal-ring {
+  position: absolute;
+  inset: 8%;
+  border-radius: 50%;
+  border: 2px dashed rgba(232, 197, 71, 0.22);
+  pointer-events: none;
+}
+
+.deal-pointer {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  border-radius: 50%;
+  background: var(--gold);
+  box-shadow: 0 0 12px rgba(232, 197, 71, 0.8);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.table-wrap.dealing .deal-ring {
+  animation: ringSpin 0.8s ease-out;
+}
+
+.table-wrap.dealing .deal-pointer {
+  animation: pointerSweep 0.75s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+.table-wrap.dealing .table-core {
+  animation: corePulse 0.7s ease;
+}
+
+.table-wrap.dealing .seat.joker .seat-name {
+  animation: namePop 0.5s cubic-bezier(0.2, 1.35, 0.3, 1) 0.28s both;
+}
+
+.table-wrap.dealing .seat.start .seat-name {
+  animation: namePop 0.5s cubic-bezier(0.2, 1.35, 0.3, 1) 0.4s both;
+}
+
+.table-wrap.dealing .seat-tag {
+  animation: tagStamp 0.45s cubic-bezier(0.2, 1.4, 0.3, 1) 0.35s both;
+}
+
+.table-wrap.dealing-random .seat .seat-name {
+  animation: shuffleGlow 0.7s ease;
+}
+
+.table-wrap.dealing-random .seat.joker .seat-name,
+.table-wrap.dealing-random .seat.start .seat-name {
+  animation: shuffleGlow 0.7s ease, namePop 0.45s cubic-bezier(0.2, 1.35, 0.3, 1) 0.55s both;
+}
+
+.deal-hint {
+  animation: fadeUp 0.45s ease 0.2s both;
+}
+
 .table-core {
   position: absolute;
   inset: 24%;
@@ -990,6 +1050,46 @@ select:focus {
   100% { opacity: 0; transform: translateY(-110vh) rotate(180deg); }
 }
 
+@keyframes ringSpin {
+  from { transform: rotate(-90deg); opacity: 0.2; }
+  to { transform: rotate(270deg); opacity: 1; }
+}
+
+@keyframes pointerSweep {
+  from {
+    opacity: 1;
+    transform: rotate(var(--from-angle)) translate(108px) scale(0.6);
+  }
+  70% { opacity: 1; }
+  to {
+    opacity: 0;
+    transform: rotate(var(--to-angle)) translate(108px) scale(1.1);
+  }
+}
+
+@keyframes corePulse {
+  0% { transform: scale(0.88) rotate(-12deg); opacity: 0.55; }
+  55% { transform: scale(1.05) rotate(3deg); opacity: 1; }
+  100% { transform: none; opacity: 1; }
+}
+
+@keyframes namePop {
+  0% { transform: scale(0.7); }
+  55% { transform: scale(1.12); }
+  100% { transform: scale(1); }
+}
+
+@keyframes tagStamp {
+  0% { opacity: 0; transform: scale(1.6) rotate(-18deg); }
+  100% { opacity: 1; transform: none; }
+}
+
+@keyframes shuffleGlow {
+  0%, 100% { filter: none; }
+  20%, 60% { filter: brightness(1.35); }
+  40%, 80% { filter: brightness(0.9); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .result-overlay,
   .winner-card,
@@ -1001,7 +1101,13 @@ select:focus {
   .result-title,
   .lost-block,
   .safe-block,
-  .result-actions {
+  .result-actions,
+  .deal-ring,
+  .deal-pointer,
+  .table-wrap.dealing .table-core,
+  .table-wrap.dealing .seat-name,
+  .table-wrap.dealing .seat-tag,
+  .deal-hint {
     animation: none !important;
   }
 }
@@ -1009,7 +1115,7 @@ select:focus {
 @media (min-width: 720px) {
   #app {
     max-width: 880px;
-    padding: 22px 18px 32px;
+    padding: calc(52px + var(--safe-t)) 18px 32px;
   }
 
   .suit-row {

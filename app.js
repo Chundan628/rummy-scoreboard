@@ -30,6 +30,8 @@
     resultOpen: false,
     resultShownFor: "",
     jokerChooserId: null,
+    dealAnim: "",
+    dealFrom: 0,
   });
 
   function loadState() {
@@ -60,7 +62,7 @@
   let state = loadState();
 
   function save() {
-    const { toast, ...persist } = state;
+    const { toast, dealAnim, dealFrom, ...persist } = state;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(persist));
   }
 
@@ -572,11 +574,20 @@
         </div>
       `;
     }).join("");
+    const toIndex = jokerIndex(chooserId);
+    const fromIndex = Number.isFinite(Number(state.dealFrom)) ? Number(state.dealFrom) : toIndex;
+    let fromAngle = (360 * fromIndex) / count - 90;
+    let toAngle = (360 * toIndex) / count - 90;
+    if (state.dealAnim === "random") toAngle += 360;
+    else if (toAngle <= fromAngle) toAngle += 360;
+    const animClass = state.dealAnim === "random" ? "dealing dealing-random" : state.dealAnim ? "dealing" : "";
     return `
       <section class="panel table-panel">
         <h2>This hand</h2>
-        <p class="hint"><strong>${escapeHtml(roles.joker)}</strong> chooses the joker. The player before — <strong>${escapeHtml(roles.starter)}</strong> — picks the open card and starts.</p>
-        <div class="table-wrap" style="--n:${count}">
+        <p class="hint ${state.dealAnim ? "deal-hint" : ""}"><strong>${escapeHtml(roles.joker)}</strong> chooses the joker. The player before — <strong>${escapeHtml(roles.starter)}</strong> — picks the open card and starts.</p>
+        <div class="table-wrap ${animClass}" style="--n:${count}; --from-angle:${fromAngle}deg; --to-angle:${toAngle}deg">
+          <div class="deal-ring" aria-hidden="true"></div>
+          <div class="deal-pointer" aria-hidden="true"></div>
           <div class="table-core">
             <span class="core-kicker">Table</span>
             <span class="core-line">${escapeHtml(roles.joker)} → joker</span>
@@ -715,6 +726,14 @@
         if (el) el.classList.remove("show");
       }, 2200);
     }
+    if (state.dealAnim) {
+      window.clearTimeout(render.dealTimer);
+      render.dealTimer = window.setTimeout(() => {
+        state.dealAnim = "";
+        document.querySelector(".table-wrap")?.classList.remove("dealing", "dealing-random");
+        document.querySelector(".deal-hint")?.classList.remove("deal-hint");
+      }, 900);
+    }
   }
 
   document.getElementById("app").addEventListener("input", (event) => {
@@ -822,19 +841,27 @@
       return;
     }
     if (action === "next-deal") {
+      if (state.dealAnim) return;
+      const dealFrom = jokerIndex();
       const jokerChooserId = nextJokerId();
       const roles = dealRoles(jokerChooserId);
       setState({
         jokerChooserId,
+        dealAnim: "next",
+        dealFrom,
         toast: `${roles.joker} chooses the joker. ${roles.starter} starts by picking the open card.`,
       });
       return;
     }
     if (action === "random-deal") {
+      if (state.dealAnim) return;
+      const dealFrom = jokerIndex();
       const jokerChooserId = pickRandomJoker();
       const roles = dealRoles(jokerChooserId);
       setState({
         jokerChooserId,
+        dealAnim: "random",
+        dealFrom,
         toast: `${roles.joker} chooses the joker. ${roles.starter} starts by picking the open card.`,
       });
       return;
