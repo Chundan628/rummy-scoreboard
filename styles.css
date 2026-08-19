@@ -63,6 +63,64 @@ select {
   padding: calc(12px + var(--safe-t)) 14px calc(24px + var(--safe-b));
 }
 
+.home-hero {
+  text-align: center;
+  padding: 18px 8px 22px;
+}
+
+.home-mark {
+  margin: 0 auto 12px;
+  width: 58px;
+  height: 58px;
+  font-size: 28px;
+}
+
+.home-kicker {
+  margin: 0 0 6px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  font-size: 12px;
+  color: var(--gold-2);
+}
+
+.home-hero h1 {
+  font-family: "Cormorant Garamond", Georgia, serif;
+  font-size: 56px;
+  line-height: 0.9;
+  margin: 0;
+}
+
+.home-sub {
+  margin: 12px auto 0;
+  max-width: 34em;
+  color: var(--ivory-dim);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.basics,
+.basics-list {
+  margin: 0;
+  padding: 0 0 0 1.15em;
+  color: var(--ivory);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.basics li,
+.basics-list li {
+  margin: 0 0 10px;
+}
+
+.basics li:last-child,
+.basics-list li:last-child {
+  margin-bottom: 0;
+}
+
+.home-actions {
+  margin-top: 14px;
+}
+
 .back-btn {
   display: inline-flex;
   align-items: center;

@@ -20,7 +20,7 @@
     }));
 
   const blankState = () => ({
-    screen: "setup",
+    screen: "home",
     started: false,
     players: defaultPlayers(),
     rounds: [],
@@ -42,6 +42,9 @@
         ...data,
         toast: "",
         started: Boolean(data.started || data.screen === "game" || (Array.isArray(data.rounds) && data.rounds.length)),
+        screen: (data.started || (Array.isArray(data.rounds) && data.rounds.length))
+          ? (data.screen || "game")
+          : "home",
         draft: data.draft && typeof data.draft === "object" ? data.draft : {},
       };
     } catch {
@@ -278,6 +281,41 @@
     }
   }
 
+  function renderHome() {
+    const inProgress = Boolean(state.started || state.rounds.length);
+    return `
+      <header class="home-hero">
+        <div class="brand-mark home-mark">♠</div>
+        <p class="home-kicker">Table scoreboard</p>
+        <h1>Rummy</h1>
+        <p class="home-sub">Keep score with your friends. Type each hand, and each person's total adds up by itself.</p>
+      </header>
+      <section class="panel">
+        <h2>How it works</h2>
+        <ol class="basics">
+          <li><strong>Add players</strong> — put in everyone's name. You can add or remove people anytime.</li>
+          <li><strong>Pick a drop-out</strong> — 320, 520, or 720. First person to reach it loses.</li>
+          <li><strong>Enter each score</strong> — after a hand, type that person's points and tap +. Only their total goes up.</li>
+          <li><strong>Check history</strong> — every individual score stays listed under that person's name.</li>
+        </ol>
+      </section>
+      <section class="panel">
+        <h2>Scoring basics</h2>
+        <ul class="basics-list">
+          <li>Winner of the hand gets <strong>0</strong>.</li>
+          <li>Everyone else gets the points from that hand.</li>
+          <li>Lowest total is leading.</li>
+          <li>When someone hits the drop-out, the lowest remaining score wins.</li>
+        </ul>
+      </section>
+      <div class="actions home-actions">
+        <button class="btn btn-primary" data-action="goto-setup">${inProgress ? "Edit players" : "Set up players"}</button>
+        ${inProgress ? `<button class="btn btn-ghost" data-action="start">Continue game</button>` : ""}
+        ${inProgress ? `<button class="btn btn-danger" data-action="home-new">New game</button>` : ""}
+      </div>
+    `;
+  }
+
   function renderSetup() {
     const rows = state.players
       .map((player, index) => {
@@ -301,7 +339,7 @@
       .join("");
 
     return `
-      ${state.started ? `<button type="button" class="back-btn" data-action="start">← Back to scoreboard</button>` : ""}
+      <button type="button" class="back-btn" data-action="${state.started ? "start" : "home"}">${state.started ? "← Back to scoreboard" : "← Home"}</button>
       <header class="topbar">
         <div class="brand">
           <div class="brand-mark">♠</div>
@@ -548,7 +586,12 @@
       ? `<div class="toast show">${escapeHtml(state.toast)}</div>`
       : `<div class="toast"></div>`;
     document.body.classList.toggle("locked", Boolean(state.resultOpen));
-    root.innerHTML = (state.screen === "setup" ? renderSetup() : renderGame()) + renderResult() + toast;
+    const page = state.screen === "home"
+      ? renderHome()
+      : state.screen === "setup"
+        ? renderSetup()
+        : renderGame();
+    root.innerHTML = page + renderResult() + toast;
 
     if (state.toast) {
       window.clearTimeout(render.timer);
@@ -623,6 +666,28 @@
         target,
         toast: target ? `Drop-out is now ${target}.` : "No drop-out limit.",
       }));
+      return;
+    }
+    if (action === "home") {
+      setState({ screen: "home", resultOpen: false });
+      return;
+    }
+    if (action === "goto-setup") {
+      setState({ screen: "setup" });
+      return;
+    }
+    if (action === "home-new") {
+      if (!state.rounds.length || window.confirm("Start a new game? Current scores will be cleared.")) {
+        setState({
+          screen: "setup",
+          started: false,
+          rounds: [],
+          draft: {},
+          resultOpen: false,
+          resultShownFor: "",
+          toast: "New game. Add names and pick a drop-out.",
+        });
+      }
       return;
     }
     if (action === "start") {
