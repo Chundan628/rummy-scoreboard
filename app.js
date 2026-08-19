@@ -17,10 +17,10 @@
 
   const FIXED_ROSTER = [
     { id: "navaneeth", name: "Navaneeth", photo: "photos/navaneeth.jpg", laugh: "photos/navaneeth-laugh.jpg", lose: "photos/navaneeth-lose.jpg" },
-    { id: "sharan", name: "Sharan", photo: "photos/sharan.jpg", laugh: "photos/sharan-laugh.jpg", lose: "photos/sharan-lose.jpg" },
+    { id: "sharan", name: "Sharan" },
     { id: "muthus", name: "Muthus", photo: "photos/muthus.jpg", laugh: "photos/muthus-laugh.jpg", lose: "photos/muthus-lose.jpg" },
     { id: "sreenath", name: "Sreenath" },
-    { id: "kiran", name: "Kiran" },
+    { id: "kiran", name: "Kiran", photo: "photos/kiran.jpg", laugh: "photos/kiran-laugh.jpg", lose: "photos/kiran-lose.jpg" },
   ];
 
   const defaultPlayers = () => FIXED_ROSTER.map((person) => ({ ...person }));
@@ -102,8 +102,9 @@
   }
 
   function faceHtml(person, kind, className) {
-    const src = (kind && person[kind]) || person.photo || "";
-    if (src) return `<img class="${className || "face"}" src="${src}" alt="${escapeHtml(person.name || "")}">`;
+    const art = FIXED_ROSTER.find((item) => item.id === person.id) || person;
+    const src = (kind && art[kind]) || art.photo || "";
+    if (src) return `<img class="${className || "face"}" src="${src}" alt="${escapeHtml(person.name || art.name || "")}">`;
     const initial = (person.name || "?").slice(0, 1).toUpperCase();
     return `<div class="${className || "face"} face-fallback">${escapeHtml(initial)}</div>`;
   }
