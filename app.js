@@ -18,7 +18,7 @@
   const FIXED_ROSTER = [
     { id: "navaneeth", name: "Navaneeth", photo: "photos/navaneeth.jpg", laugh: "photos/navaneeth-laugh.jpg", lose: "photos/navaneeth-lose.jpg" },
     { id: "sharan", name: "Sharan", photo: "photos/sharan.jpg", laugh: "photos/sharan-laugh.jpg", lose: "photos/sharan-lose.jpg" },
-    { id: "muthus", name: "Muthus", photo: "photos/muthus.jpg", laugh: "photos/muthus-laugh.jpg", lose: "photos/muthus-lose.jpg" },
+    { id: "muthus", name: "Muthus", photo: "photos/muthus.jpg?v=19", laugh: "photos/muthus-laugh.jpg?v=19", lose: "photos/muthus-lose.jpg?v=19" },
     { id: "sreenath", name: "Sreenath", photo: "photos/sreenath.jpg", laugh: "photos/sreenath-laugh.jpg", lose: "photos/sreenath-lose.jpg" },
     { id: "kiran", name: "Kiran", photo: "photos/kiran.jpg", laugh: "photos/kiran-laugh.jpg", lose: "photos/kiran-lose.jpg" },
   ];
