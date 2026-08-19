@@ -4,6 +4,8 @@
   const COLORS = ["#e8c547", "#e85d4c", "#4ecdc4", "#a78bfa", "#60a5fa", "#f472b6", "#34d399", "#fb923c", "#94a3b8", "#f0abfc"];
   const MAX_PLAYERS = 10;
   const MIN_PLAYERS = 2;
+  const ROULETTE_MS = 3200;
+  const ROULETTE_RANDOM_MS = 4000;
   const TARGETS = [
     [0, "None"],
     [320, "320"],
@@ -558,46 +560,62 @@
   }
 
   function renderDealCircle() {
+    const spinning = Boolean(state.dealAnim);
     const chooserId = state.jokerChooserId && state.players.some((p) => p.id === state.jokerChooserId)
       ? state.jokerChooserId
       : state.players[0].id;
     const roles = dealRoles(chooserId);
     const count = state.players.length;
+    const toIndex = jokerIndex(chooserId);
+    const fromIndex = Number.isFinite(Number(state.dealFrom)) ? Number(state.dealFrom) : toIndex;
+    const extraTurns = state.dealAnim === "random" ? 7 : 5;
+    const spinFrom = -((360 * fromIndex) / count);
+    let spinTo = -((360 * toIndex) / count) - 360 * extraTurns;
+    if (spinTo >= spinFrom) spinTo -= 360;
+    const slice = 360 / count;
+    const pockets = state.players.map((_, index) => {
+      const color = COLORS[index % COLORS.length];
+      return `${color} ${index * slice}deg ${(index + 1) * slice}deg`;
+    }).join(", ");
     const seats = state.players.map((player, index) => {
-      const isJoker = player.id === roles.jokerId;
-      const isStart = player.id === roles.starterId;
+      const isJoker = !spinning && player.id === roles.jokerId;
+      const isStart = !spinning && player.id === roles.starterId;
       const label = isJoker ? "Joker" : isStart ? "Start" : "";
       return `
         <div class="seat ${isJoker ? "joker" : ""} ${isStart ? "start" : ""}" style="--i:${index}; --n:${count}">
-          <span class="seat-name">${escapeHtml(playerName(player, index))}</span>
-          ${label ? `<span class="seat-tag">${label}</span>` : ""}
+          <div class="seat-face">
+            <span class="seat-name">${escapeHtml(playerName(player, index))}</span>
+            ${label ? `<span class="seat-tag">${label}</span>` : ""}
+          </div>
         </div>
       `;
     }).join("");
-    const toIndex = jokerIndex(chooserId);
-    const fromIndex = Number.isFinite(Number(state.dealFrom)) ? Number(state.dealFrom) : toIndex;
-    let fromAngle = (360 * fromIndex) / count - 90;
-    let toAngle = (360 * toIndex) / count - 90;
-    if (state.dealAnim === "random") toAngle += 360;
-    else if (toAngle <= fromAngle) toAngle += 360;
-    const animClass = state.dealAnim === "random" ? "dealing dealing-random" : state.dealAnim ? "dealing" : "";
+    const animClass = state.dealAnim === "random" ? "dealing dealing-random" : spinning ? "dealing" : "";
     return `
       <section class="panel table-panel">
         <h2>This hand</h2>
-        <p class="hint ${state.dealAnim ? "deal-hint" : ""}"><strong>${escapeHtml(roles.joker)}</strong> chooses the joker. The player before — <strong>${escapeHtml(roles.starter)}</strong> — picks the open card and starts.</p>
-        <div class="table-wrap ${animClass}" style="--n:${count}; --from-angle:${fromAngle}deg; --to-angle:${toAngle}deg">
-          <div class="deal-ring" aria-hidden="true"></div>
-          <div class="deal-pointer" aria-hidden="true"></div>
-          <div class="table-core">
-            <span class="core-kicker">Table</span>
-            <span class="core-line">${escapeHtml(roles.joker)} → joker</span>
-            <span class="core-line">${escapeHtml(roles.starter)} → start</span>
+        <p class="hint">${spinning
+          ? "Spinning… the wheel will stop on who chooses the joker."
+          : `<strong>${escapeHtml(roles.joker)}</strong> chooses the joker. The player before — <strong>${escapeHtml(roles.starter)}</strong> — picks the open card and starts.`}</p>
+        <div
+          class="table-wrap ${animClass}"
+          style="--n:${count}; --land:${toIndex}; --spin-from:${spinFrom}deg; --spin-to:${spinTo}deg; --pockets: conic-gradient(from ${-90 - slice / 2}deg, ${pockets})"
+        >
+          <div class="roulette-pointer" aria-hidden="true"></div>
+          <div class="roulette-wheel">
+            <div class="roulette-pockets" aria-hidden="true"></div>
+            ${seats}
           </div>
-          ${seats}
+          <div class="table-core">
+            <span class="core-kicker">${spinning ? "Spinning" : "Table"}</span>
+            ${spinning
+              ? `<span class="core-line">Who chooses joker?</span>`
+              : `<span class="core-line">${escapeHtml(roles.joker)} → joker</span><span class="core-line">${escapeHtml(roles.starter)} → start</span>`}
+          </div>
         </div>
         <div class="actions">
-          <button class="btn btn-ghost" data-action="next-deal">Next deal</button>
-          <button class="btn btn-ghost" data-action="random-deal">Random first player</button>
+          <button class="btn btn-ghost" data-action="next-deal" ${spinning ? "disabled" : ""}>Next deal</button>
+          <button class="btn btn-ghost" data-action="random-deal" ${spinning ? "disabled" : ""}>Random first player</button>
         </div>
       </section>
     `;
@@ -727,12 +745,16 @@
       }, 2200);
     }
     if (state.dealAnim) {
+      const wait = state.dealAnim === "random" ? ROULETTE_RANDOM_MS : ROULETTE_MS;
       window.clearTimeout(render.dealTimer);
       render.dealTimer = window.setTimeout(() => {
-        state.dealAnim = "";
-        document.querySelector(".table-wrap")?.classList.remove("dealing", "dealing-random");
-        document.querySelector(".deal-hint")?.classList.remove("deal-hint");
-      }, 900);
+        if (!state.dealAnim) return;
+        const roles = dealRoles();
+        setState({
+          dealAnim: "",
+          toast: `${roles.joker} chooses the joker. ${roles.starter} starts by picking the open card.`,
+        });
+      }, wait);
     }
   }
 
@@ -844,12 +866,11 @@
       if (state.dealAnim) return;
       const dealFrom = jokerIndex();
       const jokerChooserId = nextJokerId();
-      const roles = dealRoles(jokerChooserId);
       setState({
         jokerChooserId,
         dealAnim: "next",
         dealFrom,
-        toast: `${roles.joker} chooses the joker. ${roles.starter} starts by picking the open card.`,
+        toast: "",
       });
       return;
     }
@@ -857,12 +878,11 @@
       if (state.dealAnim) return;
       const dealFrom = jokerIndex();
       const jokerChooserId = pickRandomJoker();
-      const roles = dealRoles(jokerChooserId);
       setState({
         jokerChooserId,
         dealAnim: "random",
         dealFrom,
-        toast: `${roles.joker} chooses the joker. ${roles.starter} starts by picking the open card.`,
+        toast: "",
       });
       return;
     }
