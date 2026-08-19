@@ -1,5 +1,5 @@
 (() => {
-  const STORAGE_KEY = "rummy-scoreboard-v1";
+  const STORAGE_KEY = "rummy-scoreboard-v2";
   const SUITS = ["♠", "♥", "♦", "♣"];
   const COLORS = ["#e8c547", "#e85d4c", "#4ecdc4", "#a78bfa", "#60a5fa", "#f472b6", "#34d399", "#fb923c", "#94a3b8", "#f0abfc"];
   const MAX_PLAYERS = 10;
@@ -15,15 +15,21 @@
 
   const uid = () => Math.random().toString(36).slice(2, 10);
 
-  const defaultPlayers = () =>
-    Array.from({ length: 7 }, (_, i) => ({
-      id: uid(),
-      name: i === 0 ? "You" : `Friend ${i}`,
-    }));
+  const FIXED_ROSTER = [
+    { id: "navaneeth", name: "Navaneeth", photo: "photos/navaneeth.jpg", laugh: "photos/navaneeth-laugh.jpg", lose: "photos/navaneeth-lose.jpg" },
+    { id: "sharan", name: "Sharan", photo: "photos/sharan.jpg", laugh: "photos/sharan-laugh.jpg", lose: "photos/sharan-lose.jpg" },
+    { id: "muthus", name: "Muthus", photo: "photos/muthus.jpg", laugh: "photos/muthus-laugh.jpg", lose: "photos/muthus-lose.jpg" },
+    { id: "sreenath", name: "Sreenath" },
+    { id: "kiran", name: "Kiran" },
+  ];
+
+  const defaultPlayers = () => FIXED_ROSTER.map((person) => ({ ...person }));
 
   const blankState = () => ({
     screen: "home",
     started: false,
+    extras: [],
+    selectedIds: FIXED_ROSTER.map((person) => person.id),
     players: defaultPlayers(),
     rounds: [],
     target: 0,
@@ -41,8 +47,12 @@
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return blankState();
       const data = JSON.parse(raw);
-      if (!Array.isArray(data.players) || data.players.length < MIN_PLAYERS) return blankState();
+      if (!Array.isArray(data.players) || data.players.length < 1) return blankState();
       const started = Boolean(data.started || data.screen === "game" || (Array.isArray(data.rounds) && data.rounds.length));
+      const extras = Array.isArray(data.extras) ? data.extras : [];
+      const selectedIds = Array.isArray(data.selectedIds) && data.selectedIds.length
+        ? data.selectedIds
+        : (data.players || []).map((player) => player.id);
       const players = data.players;
       const savedJoker = players.some((player) => player.id === data.jokerChooserId)
         ? data.jokerChooserId
@@ -51,6 +61,8 @@
         ...blankState(),
         ...data,
         toast: "",
+        extras,
+        selectedIds,
         started,
         screen: started ? (data.screen || "game") : "home",
         jokerChooserId: savedJoker || (started ? players[Math.floor(Math.random() * players.length)].id : null),
@@ -85,6 +97,25 @@
     return name || `Player ${index + 1}`;
   }
 
+  function rosterAll() {
+    return [...FIXED_ROSTER, ...(state.extras || [])];
+  }
+
+  function faceHtml(person, kind, className) {
+    const src = (kind && person[kind]) || person.photo || "";
+    if (src) return `<img class="${className || "face"}" src="${src}" alt="${escapeHtml(person.name || "")}">`;
+    const initial = (person.name || "?").slice(0, 1).toUpperCase();
+    return `<div class="${className || "face"} face-fallback">${escapeHtml(initial)}</div>`;
+  }
+
+  function playersFromSelection(ids) {
+    const chosen = ids && ids.length ? ids : FIXED_ROSTER.map((person) => person.id);
+    return chosen
+      .map((id) => rosterAll().find((person) => person.id === id))
+      .filter(Boolean)
+      .map((person) => ({ ...person }));
+  }
+
   function pickRandomJoker() {
     return state.players[Math.floor(Math.random() * state.players.length)].id;
   }
@@ -111,10 +142,15 @@
   }
 
   function withJoker(extra = {}) {
-    const valid = state.jokerChooserId && state.players.some((player) => player.id === state.jokerChooserId);
-    if (valid) return extra;
-    const jokerChooserId = pickRandomJoker();
+    const list = extra.players || state.players;
+    const current = extra.jokerChooserId || state.jokerChooserId;
+    const valid = current && list.some((player) => player.id === current);
+    if (valid) return { ...extra, jokerChooserId: current };
+    const jokerChooserId = list[Math.floor(Math.random() * list.length)].id;
+    const prior = state.players;
+    state.players = list;
     const roles = dealRoles(jokerChooserId);
+    state.players = prior;
     return {
       ...extra,
       jokerChooserId,
@@ -350,41 +386,51 @@
 
   function renderHome() {
     const inProgress = Boolean(state.started || state.rounds.length);
+    const selected = new Set(state.selectedIds || []);
+    const people = rosterAll().map((person) => {
+      const on = selected.has(person.id);
+      const fixed = FIXED_ROSTER.some((item) => item.id === person.id);
+      return `
+        <label class="pick-card ${on ? "on" : ""}">
+          <input type="checkbox" data-action="toggle-player" data-id="${person.id}" ${on ? "checked" : ""}>
+          ${faceHtml(person, "photo", "pick-face")}
+          <span class="pick-name">${escapeHtml(person.name)}</span>
+          ${fixed ? "" : `<button type="button" class="pick-remove" data-action="remove-extra" data-id="${person.id}" aria-label="Remove">×</button>`}
+        </label>
+      `;
+    }).join("");
     return `
       <header class="home-hero">
         <div class="brand-mark home-mark">♠</div>
         <p class="home-kicker">Table scoreboard</p>
         <h1>Rummy</h1>
-        <p class="home-sub">Keep score with your friends. Type each hand, and each person's total adds up by itself.</p>
+        <p class="home-sub">The regulars stay here. Tick who is playing this game, then start.</p>
       </header>
       <section class="panel">
-        <h2>How it works</h2>
-        <ol class="basics">
-          <li><strong>Add players</strong> — put in everyone's name. You can add or remove people anytime.</li>
-          <li><strong>Pick a drop-out</strong> — 320, 520, or 720. First person to reach it loses.</li>
-          <li><strong>Enter scores in the table</strong> — type each person's points for that hand. Their total adds up automatically.</li>
-          <li><strong>Read the sheet</strong> — every hand stays in the table, with a TOTAL row at the bottom.</li>
-          <li><strong>Joker &amp; start</strong> — one player chooses the joker. The player before them picks the open card and starts.</li>
-        </ol>
+        <h2>Who's playing</h2>
+        <p class="hint">Navaneeth, Sharan, Muthus, Sreenath and Kiran are always on the list. Add a person only if someone new sits down.</p>
+        <div class="pick-grid">${people}</div>
+        <div class="add-row">
+          <input type="text" data-role="new-name" maxlength="18" placeholder="New player name">
+          <button class="btn btn-ghost" data-action="add-extra">Add person</button>
+        </div>
+        <div class="target-row">
+          <p class="hint">Drop-out score</p>
+          ${renderTargetChips()}
+        </div>
+        <div class="actions home-actions">
+          <button class="btn btn-primary" data-action="start">${inProgress ? "Continue with this table" : "Start game"}</button>
+          ${inProgress ? `<button class="btn btn-danger" data-action="home-new">New game</button>` : ""}
+        </div>
       </section>
-      <section class="panel">
-        <h2>Scoring basics</h2>
-        <ul class="basics-list">
-          <li>Winner of the hand gets <strong>0</strong>.</li>
-          <li>Everyone else gets the points from that hand.</li>
-          <li>Lowest total is leading.</li>
-          <li>When someone hits the drop-out, the lowest remaining score wins.</li>
-          <li>If 4 players sit in a circle and player 1 chooses the joker, player 4 starts.</li>
-        </ul>
-      </section>
-      <div class="actions home-actions">
-        <button class="btn btn-primary" data-action="goto-setup">${inProgress ? "Edit players" : "Set up players"}</button>
-        ${inProgress ? `<button class="btn btn-danger" data-action="home-new">New game</button>` : ""}
-      </div>
     `;
   }
 
   function renderSetup() {
+    return renderHome();
+  }
+
+  function renderSetupUnused() {
     const rows = state.players
       .map((player, index) => {
         const color = COLORS[index % COLORS.length];
@@ -507,7 +553,10 @@
       <tr>
         <th class="sheet-corner">Hand</th>
         ${state.players.map((player, index) => `
-          <th data-col="${player.id}" class="${player.id === leaderId ? "lead-col" : ""} ${outIds.has(player.id) ? "out" : ""}">${escapeHtml(playerName(player, index))}</th>
+          <th data-col="${player.id}" class="${player.id === leaderId ? "lead-col" : ""} ${outIds.has(player.id) ? "out" : ""}">
+              ${faceHtml(player, "photo", "sheet-face")}
+              <div>${escapeHtml(playerName(player, index))}</div>
+            </th>
         `).join("")}
       </tr>
     `;
@@ -623,6 +672,7 @@
       return `
         <div class="seat ${isJoker ? "joker" : ""} ${isStart ? "start" : ""}" style="--i:${index}; --n:${count}">
           <div class="seat-face">
+            ${faceHtml(player, "photo", "seat-pic")}
             <span class="seat-name">${escapeHtml(playerName(player, index))}</span>
             ${label ? `<span class="seat-tag">${label}</span>` : ""}
           </div>
@@ -700,51 +750,39 @@
   function renderResult() {
     const result = gameResultFrom(state.rounds);
     if (!state.resultOpen || !result) return "";
-    const suits = ["♠", "♥", "♦", "♣", "♠", "♥", "♦", "♣"];
-    const burst = suits
-      .map((suit, i) => {
-        const left = 6 + i * 12;
-        const delay = (i * 0.12).toFixed(2);
-        const red = suit === "♥" || suit === "♦" ? "red-suit" : "";
-        return `<span class="float-suit ${red}" style="left:${left}%; animation-delay:${delay}s">${suit}</span>`;
-      })
-      .join("");
-    const losers = result.losers
-      .map((player) => `
-        <div class="loser-row">
-          <div>
-            <div class="name">${escapeHtml(player.name)}</div>
-            <div class="pts">${player.total} pts · reached ${state.target}</div>
-          </div>
-          <span class="stamp">LOST</span>
-        </div>
-      `)
-      .join("");
-    const safe = result.safe
-      .map((player) => `
-        <div class="safe-row">
-          <span>${escapeHtml(player.name)}</span>
-          <span>${player.total}</span>
-        </div>
-      `)
-      .join("");
+    const roastLoser = result.losers[0] || null;
+    const winnerFull = state.players.find((player) => player.id === result.winner.id) || result.winner;
+    const loserFull = roastLoser
+      ? (state.players.find((player) => player.id === roastLoser.id) || roastLoser)
+      : null;
+    const poppers = Array.from({ length: 52 }, (_, i) => {
+      const bits = ["🎉", "🎊", "✨", "💥", "🎈"];
+      return `<span class="popper" style="--x:${(i * 7.3) % 100}%; --d:${((i % 10) * 0.08).toFixed(2)}s; --t:${(1.8 + (i % 5) * 0.2).toFixed(2)}s">${bits[i % 5]}</span>`;
+    }).join("");
     return `
-      <div class="result-overlay" role="dialog" aria-label="Game result">
-        <div class="burst" aria-hidden="true">${burst}</div>
-        <div class="result-sheet">
-          <p class="result-kicker">${result.allOut ? "Everyone dropped" : "Drop-out reached"}</p>
-          <h2 class="result-title">Game over</h2>
-          <article class="winner-card">
-            <div class="crown" aria-hidden="true">👑</div>
-            <div class="tag">Winner</div>
-            <h2>${escapeHtml(result.winner.name)}</h2>
-            <p class="score">${result.winner.total} points${result.allOut ? " · lowest score" : ""}</p>
-          </article>
-          ${result.losers.length ? `<section class="lost-block"><h3>Lost</h3>${losers}</section>` : ""}
-          ${result.safe.length ? `<section class="safe-block"><h3>Still under ${state.target}</h3>${safe}</section>` : ""}
+      <div class="result-overlay roast" role="dialog" aria-label="Game result">
+        <div class="popper-layer" aria-hidden="true">${poppers}</div>
+        <button type="button" class="roast-close" data-action="close-result">Close</button>
+        <div class="roast-stage">
+          <p class="result-kicker">Drop-out reached</p>
+          <div class="roast-pair">
+            <figure class="roast-winner">
+              ${faceHtml(winnerFull, "laugh", "roast-face laugh")}
+              <figcaption>${escapeHtml(result.winner.name)} wins</figcaption>
+            </figure>
+            ${loserFull ? `
+              <figure class="roast-loser">
+                ${faceHtml(loserFull, "lose", "roast-face lose")}
+                <figcaption>${escapeHtml(loserFull.name)} lost · ${loserFull.total}</figcaption>
+              </figure>
+            ` : ""}
+          </div>
+          <p class="roast-line">${loserFull
+            ? `${escapeHtml(result.winner.name)} is laughing at ${escapeHtml(loserFull.name)}!`
+            : `${escapeHtml(result.winner.name)} takes it with ${result.winner.total} points.`}</p>
           <div class="result-actions">
             <button class="btn btn-primary" data-action="new-game">Play again</button>
-            <button class="btn btn-ghost" data-action="close-result">Keep this board</button>
+            <button class="btn btn-ghost" data-action="close-result">Close</button>
           </div>
         </div>
       </div>
@@ -854,6 +892,13 @@
 
   document.getElementById("app").addEventListener("change", (event) => {
     const el = event.target;
+    if (el.dataset.action === "toggle-player") {
+      const selected = new Set(state.selectedIds || []);
+      if (el.checked) selected.add(el.dataset.id);
+      else selected.delete(el.dataset.id);
+      setState({ selectedIds: [...selected] });
+      return;
+    }
     if (el.dataset.action !== "cell") return;
     commitCell(Number(el.dataset.round), el.dataset.id, el.value);
   });
@@ -862,20 +907,34 @@
     const el = event.target.closest("[data-action]");
     if (!el) return;
     const action = el.dataset.action;
-    if (action === "add-player") {
-      if (state.players.length >= MAX_PLAYERS) return;
+    if (action === "add-extra") {
+      const field = document.querySelector("[data-role='new-name']");
+      const name = (field && field.value ? field.value : "").trim();
+      if (!name) {
+        showToast("Type the new person's name first.");
+        return;
+      }
+      const id = uid();
       setState({
-        players: [...state.players, { id: uid(), name: `Friend ${state.players.length}` }],
+        extras: [...(state.extras || []), { id, name }],
+        selectedIds: [...(state.selectedIds || []), id],
       });
       return;
     }
+    if (action === "remove-extra") {
+      event.preventDefault();
+      event.stopPropagation();
+      const id = el.dataset.id;
+      setState({
+        extras: (state.extras || []).filter((person) => person.id !== id),
+        selectedIds: (state.selectedIds || []).filter((item) => item !== id),
+      });
+      return;
+    }
+    if (action === "add-player") {
+      return;
+    }
     if (action === "remove-player") {
-      if (state.players.length <= MIN_PLAYERS) return;
-      const players = state.players.filter((p) => p.id !== el.dataset.id);
-      const jokerChooserId = players.some((p) => p.id === state.jokerChooserId)
-        ? state.jokerChooserId
-        : players[Math.floor(Math.random() * players.length)].id;
-      setState({ players, jokerChooserId });
       return;
     }
     if (action === "target") {
@@ -893,12 +952,20 @@
       return;
     }
     if (action === "tab-board") {
-      setState(withResult(state.rounds, withJoker({
+      const selected = state.selectedIds || [];
+      if (selected.length < MIN_PLAYERS) {
+        showToast("Tick at least two people who are playing.");
+        setState({ screen: "home", resultOpen: false });
+        return;
+      }
+      const patch = {
         screen: "game",
         started: true,
         draft: state.draft,
         resultOpen: false,
-      })));
+      };
+      if (!state.rounds.length) patch.players = playersFromSelection(selected);
+      setState(withResult(state.rounds, withJoker(patch)));
       return;
     }
     if (action === "goto-setup") {
@@ -908,20 +975,31 @@
     if (action === "home-new") {
       if (!state.rounds.length || window.confirm("Start a new game? Current scores will be cleared.")) {
         setState({
-          screen: "setup",
+          screen: "home",
           started: false,
           rounds: [],
           draft: {},
           resultOpen: false,
           resultShownFor: "",
           jokerChooserId: null,
-          toast: "New game. Add names and pick a drop-out.",
+          toast: "New game. Tick who is playing.",
         });
       }
       return;
     }
     if (action === "start") {
-      setState(withResult(state.rounds, withJoker({ screen: "game", started: true, draft: {} })));
+      const selected = state.selectedIds || [];
+      if (selected.length < MIN_PLAYERS) {
+        showToast("Tick at least two people who are playing.");
+        return;
+      }
+      const players = playersFromSelection(selected);
+      setState(withResult(state.rounds, withJoker({
+        screen: "game",
+        started: true,
+        players,
+        draft: {},
+      })));
       return;
     }
     if (action === "next-deal") {
@@ -982,17 +1060,16 @@
     }
     if (action === "new-game") {
       const fromOverlay = Boolean(state.resultOpen);
-      if (fromOverlay || !state.rounds.length || window.confirm("Clear all rounds and start a new game with the same players?")) {
-        const jokerChooserId = pickRandomJoker();
-        const roles = dealRoles(jokerChooserId);
+      if (fromOverlay || !state.rounds.length || window.confirm("Clear scores and pick who is playing?")) {
         setState({
-          screen: "game",
+          screen: "home",
+          started: false,
           rounds: [],
           draft: {},
           resultOpen: false,
           resultShownFor: "",
-          jokerChooserId,
-          toast: `New game. ${roles.joker} chooses the joker. ${roles.starter} starts.`,
+          jokerChooserId: null,
+          toast: "New game. Tick who is playing.",
         });
       }
     }
