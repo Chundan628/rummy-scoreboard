@@ -701,6 +701,81 @@ select:focus {
   font-size: 14px;
 }
 
+.seat-panel {
+  margin-bottom: 12px;
+}
+
+.seat-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.seat-row {
+  display: grid;
+  grid-template-columns: 36px 44px minmax(0, 1fr) 28px 44px 44px;
+  gap: 8px;
+  align-items: center;
+  padding: 8px;
+  border-radius: 14px;
+  background: rgba(8, 20, 14, 0.45);
+  border: 1px solid rgba(244, 234, 213, 0.1);
+  touch-action: none;
+}
+
+.seat-row.dragging {
+  opacity: 0.55;
+  border-color: var(--gold);
+}
+
+.seat-handle {
+  border: 0;
+  background: transparent;
+  color: var(--ivory-dim);
+  font-size: 18px;
+  letter-spacing: -2px;
+  cursor: grab;
+  min-height: 40px;
+}
+
+.seat-edit-face {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: center 18%;
+}
+
+.seat-edit-face.face-fallback {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+}
+
+.seat-edit-name {
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.seat-edit-num {
+  color: var(--gold-2);
+  font-weight: 800;
+  text-align: center;
+}
+
+.seat-nudge {
+  min-height: 40px;
+  padding: 0;
+  flex: 0 0 auto;
+}
+
 .sheet-panel {
   margin-top: 12px;
 }

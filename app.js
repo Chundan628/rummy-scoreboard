@@ -40,6 +40,7 @@
     jokerChooserId: null,
     dealAnim: "",
     dealFrom: 0,
+    seatEdit: false,
   });
 
   function loadState() {
@@ -76,7 +77,7 @@
   let state = loadState();
 
   function save() {
-    const { toast, dealAnim, dealFrom, ...persist } = state;
+    const { toast, dealAnim, dealFrom, seatEdit, ...persist } = state;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(persist));
   }
 
@@ -615,6 +616,125 @@
     `;
   }
 
+  function applySeatOrder(ids) {
+    const map = Object.fromEntries(state.players.map((player) => [player.id, player]));
+    const players = ids.map((id) => map[id]).filter(Boolean);
+    state.players.forEach((player) => {
+      if (!players.some((item) => item.id === player.id)) players.push(player);
+    });
+    setState({
+      players,
+      selectedIds: players.map((player) => player.id),
+      seatEdit: true,
+    });
+  }
+
+  function moveSeat(id, dir) {
+    const players = [...state.players];
+    const from = players.findIndex((player) => player.id === id);
+    const to = from + dir;
+    if (from < 0 || to < 0 || to >= players.length) return;
+    const swap = players[from];
+    players[from] = players[to];
+    players[to] = swap;
+    setState({
+      players,
+      selectedIds: players.map((player) => player.id),
+      seatEdit: true,
+    });
+  }
+
+  function renderSeatEditor() {
+    const rows = state.players.map((player, index) => `
+      <li class="seat-row" data-seat-id="${player.id}" draggable="true">
+        <button type="button" class="seat-handle" aria-label="Drag to move">⋮⋮</button>
+        ${faceHtml(player, "photo", "seat-edit-face")}
+        <span class="seat-edit-name">${escapeHtml(playerName(player, index))}</span>
+        <span class="seat-edit-num">${index + 1}</span>
+        <button type="button" class="btn btn-ghost seat-nudge" data-action="seat-up" data-id="${player.id}" ${index === 0 ? "disabled" : ""}>↑</button>
+        <button type="button" class="btn btn-ghost seat-nudge" data-action="seat-down" data-id="${player.id}" ${index === state.players.length - 1 ? "disabled" : ""}>↓</button>
+      </li>
+    `).join("");
+    return `
+      <section class="panel seat-panel">
+        <h2>Change position</h2>
+        <p class="hint">Drag a player, or use the arrows. Seat 1 sits after the last player — that order is used for joker and who starts.</p>
+        <ol id="seat-list" class="seat-list">${rows}</ol>
+        <div class="actions">
+          <button class="btn btn-primary" data-action="close-seats">Done</button>
+        </div>
+      </section>
+    `;
+  }
+
+  function bindSeatDrag() {
+    const list = document.getElementById("seat-list");
+    if (!list) return;
+    let dragId = null;
+
+    const rowFromPoint = (x, y) => {
+      const node = document.elementFromPoint(x, y);
+      return node ? node.closest("[data-seat-id]") : null;
+    };
+
+    list.addEventListener("pointerdown", (event) => {
+      const handle = event.target.closest(".seat-handle");
+      const row = event.target.closest("[data-seat-id]");
+      if (!handle || !row) return;
+      dragId = row.dataset.seatId;
+      row.classList.add("dragging");
+      try { row.setPointerCapture(event.pointerId); } catch {}
+    });
+
+    list.addEventListener("pointermove", (event) => {
+      if (!dragId) return;
+      const over = rowFromPoint(event.clientX, event.clientY);
+      const dragged = list.querySelector(`[data-seat-id="${dragId}"]`);
+      if (!over || !dragged || over === dragged) return;
+      const ids = [...list.querySelectorAll("[data-seat-id]")].map((node) => node.dataset.seatId);
+      const from = ids.indexOf(dragId);
+      const to = ids.indexOf(over.dataset.seatId);
+      if (from < 0 || to < 0) return;
+      if (from < to) over.after(dragged);
+      else over.before(dragged);
+    });
+
+    const finish = () => {
+      if (!dragId) return;
+      list.querySelector(".dragging")?.classList.remove("dragging");
+      const ids = [...list.querySelectorAll("[data-seat-id]")].map((node) => node.dataset.seatId);
+      dragId = null;
+      applySeatOrder(ids);
+    };
+
+    list.addEventListener("pointerup", finish);
+    list.addEventListener("pointercancel", finish);
+
+    list.addEventListener("dragstart", (event) => {
+      const row = event.target.closest("[data-seat-id]");
+      if (!row) return;
+      dragId = row.dataset.seatId;
+      row.classList.add("dragging");
+      event.dataTransfer.effectAllowed = "move";
+    });
+    list.addEventListener("dragover", (event) => {
+      event.preventDefault();
+      const over = event.target.closest("[data-seat-id]");
+      const dragged = list.querySelector(`[data-seat-id="${dragId}"]`);
+      if (!over || !dragged || over === dragged) return;
+      const ids = [...list.querySelectorAll("[data-seat-id]")].map((node) => node.dataset.seatId);
+      const from = ids.indexOf(dragId);
+      const to = ids.indexOf(over.dataset.seatId);
+      if (from < to) over.after(dragged);
+      else over.before(dragged);
+    });
+    list.addEventListener("drop", (event) => {
+      event.preventDefault();
+      finish();
+    });
+    list.addEventListener("dragend", finish);
+  }
+
   function renderGame() {
     const ranked = standings();
     const leader = ranked.find((p) => !p.out);
@@ -631,10 +751,12 @@
           </div>
         </div>
         <div class="actions">
+          <button class="btn btn-ghost" data-action="open-seats">Change position</button>
           <button class="btn btn-ghost" data-action="goto-setup">Players</button>
           <button class="btn btn-ghost" data-action="copy">Copy</button>
         </div>
       </header>
+      ${state.seatEdit ? renderSeatEditor() : ""}
       ${dealHtml}
       ${gameResultFrom(state.rounds) && !state.resultOpen ? `
         <div class="result-banner">
@@ -825,6 +947,7 @@
         ? renderSetup()
         : renderGame();
     root.innerHTML = renderNav() + page + renderResult() + toast;
+    bindSeatDrag();
 
     if (state.toast) {
       window.clearTimeout(render.timer);
@@ -1066,6 +1189,22 @@
     }
     if (action === "undo") {
       undoRound();
+      return;
+    }
+    if (action === "open-seats") {
+      setState({ seatEdit: true });
+      return;
+    }
+    if (action === "close-seats") {
+      setState({ seatEdit: false, toast: "Seat order saved." });
+      return;
+    }
+    if (action === "seat-up") {
+      moveSeat(el.dataset.id, -1);
+      return;
+    }
+    if (action === "seat-down") {
+      moveSeat(el.dataset.id, 1);
       return;
     }
     if (action === "copy") {
